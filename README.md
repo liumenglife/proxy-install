@@ -30,9 +30,10 @@
 1. 打开 http://192.168.100.135:9001 配置 sub-store
 2. 添加机场订阅，输出格式选 sing-box
 3. 保存输出文件到 /etc/sub-store/nodes.json
-4. 运行分组脚本：`sudo bash scripts/group-nodes.sh /etc/sub-store/nodes.json > /outbounds.json`
-5. 合并到 sing-box 配置，重启容器：`docker restart sing-box`
-6. 打开 http://192.168.100.135:9091 使用 Web UI
+4. 运行分组脚本：`sudo bash scripts/group-nodes.sh /etc/sub-store/nodes.json > /tmp/outbounds.json`
+5. 合并到 sing-box 配置：`jq -s '.[0].outbounds = .[1] | .[0]' /etc/sing-box/config.json /tmp/outbounds.json > /tmp/config-merged.json && sudo mv /tmp/config-merged.json /etc/sing-box/config.json`
+6. 重启容器：`docker restart sing-box`
+7. 打开 http://192.168.100.135:9091 使用 Web UI
 
 ### 第二阶段：TUN 模式（透明代理）
 
@@ -107,6 +108,25 @@
 | 端口 | 服务 | 说明 |
 |------|------|------|
 | 7890 | sing-box mixed | HTTP/SOCKS5 代理入口 |
-| 9090 | sing-box API | Clash API（MetaCubeXD 后端） |
-| 9091 | MetaCubeXD | Web UI（独立容器） |
-| 9001 | sub-store | 订阅管理面板 |
+| 9090 | sing-box API | Clash API，供 MetaCubeXD 连接的后端接口 |
+| 9091 | MetaCubeXD | Web UI（独立容器，映射容器 80 端口） |
+| 9001 | sub-store UI | 订阅管理面板（容器 3001） |
+| 9002 | sub-store API | sub-store 后端接口（容器 3000） |
+
+MetaCubeXD 不使用 9090，因为 9090 已由 sing-box 的 Clash API 占用。MetaCubeXD 是前端 Web UI，浏览器访问 9091；它再连接 9090 读取和切换 sing-box 代理组。
+
+## Web UI 登录与连接
+
+### MetaCubeXD
+
+- 后端地址：`http://192.168.100.135:9090`
+- 密码/Secret：留空
+
+当前 sing-box Clash API 未配置 `secret`，所以 MetaCubeXD 连接时不需要密码。
+
+### sub-store
+
+- 前端地址：`http://192.168.100.135:9001`
+- 后端地址：`http://192.168.100.135:9002`
+
+compose 已设置 `SUB_STORE_FRONTEND_BACKEND_PATH=/`，9001 前端会同源代理到后端接口。正常情况下不需要手动填写后端地址。
