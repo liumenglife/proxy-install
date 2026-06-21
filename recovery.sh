@@ -1,13 +1,23 @@
 #!/bin/bash
 # ========================================
-#  sing-box 灾难恢复脚本（三级恢复）
+#  sing-box 灾难恢复脚本
 # ========================================
 # 使用方式:
 #   sudo bash recovery.sh             交互菜单
-#   sudo bash recovery.sh --level1    一级恢复（网络恢复）
+#
+#   # --- 恢复操作（出问题后执行）---
+#   sudo bash recovery.sh --level1    一级恢复（网络恢复，删TUN/路由/nftables）
 #   sudo bash recovery.sh --level2    二级恢复（回退到 mixed 模式）
-#   sudo bash recovery.sh --level3    三级恢复（恢复到部署前状态）
-#   sudo bash recovery.sh --drill     演练模式（验证恢复能力）
+#   sudo bash recovery.sh --level3    三级恢复（从快照完全还原到部署前）
+#   sudo bash recovery.sh --drill     演练模式（开TUN前强制验证）
+#   sudo bash recovery.sh --last-resort 最后手段（禁用容器自启 + 重启）
+#
+#   # --- 预防操作（部署前执行）---
+#   sudo bash recovery.sh --snapshot  快照备份当前网络/DNS/配置（非恢复操作）
+#
+#   关键区别：
+#   --snapshot = 部署前拍快照（预防）
+#   --level*   = 出事后恢复（治疗）
 # ========================================
 # 适用范围：IPMI / 物理控制台 / 任何仍有 root Shell 的场景
 
@@ -449,24 +459,28 @@ drill_mode() {
 main_menu() {
     echo ""
     echo "================================================"
-    echo "   sing-box 灾难恢复脚本（三级恢复）"
+    echo "   sing-box 灾难恢复脚本"
     echo "   宿主机 IP: $MY_IP"
     echo "================================================"
     echo ""
+    echo "  【恢复操作】— 出问题后执行"
     echo "  一级恢复   — 网络恢复（清理 TUN/路由/nftables, 恢复 SSH）"
     echo "  二级恢复   — 代理恢复（回退到 mixed 模式, 保留代理功能）"
-    echo "  三级恢复   — 系统恢复（完全清理, 恢复到部署前状态）"
-    echo "  演练模式   — 模拟故障, 验证恢复脚本有效"
-    echo "  快照备份   — 执行部署前快照（开 TUN 前必须执行）"
+    echo "  三级恢复   — 系统恢复（从快照完全还原, 回到部署前）"
+    echo "  演练模式   — 模拟故障, 验证恢复能力（开 TUN 前必须过）"
     echo "  最后手段   — 禁用容器自启 + 重启系统"
+    echo ""
+    echo "  【预防操作】— 部署前执行"
+    echo "  快照备份   — 备份当前网络/DNS/配置（--snapshot, 非恢复操作）"
+    echo ""
     echo "================================================"
     echo ""
     echo "请选择操作:"
     echo "  1) 一级恢复（网络恢复）"
     echo "  2) 二级恢复（回退到 mixed 模式）"
-    echo "  3) 三级恢复（恢复到部署前）"
+    echo "  3) 三级恢复（从快照还原）"
     echo "  4) 演练模式（验证恢复能力）"
-    echo "  5) 快照备份（开 TUN 前执行）"
+    echo "  5) 快照备份 ⬅ 部署前预防操作"
     echo "  6) 最后手段（禁用容器 + 重启）"
     echo "  7) 退出"
     echo ""

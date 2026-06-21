@@ -310,10 +310,14 @@ Web UI 组件，以独立容器运行。
 **目标**：接管宿主机全部流量。
 
 **步骤**：
-1. `sudo bash recovery.sh --snapshot`（确保此刻有完整快照）
-2. 应用 TUN 配置（在 mixed 配置基础上增加 TUN 入站）
-3. 重启容器：`docker restart sing-box`
-4. 验证 TUN 功能
+1. `sudo bash recovery.sh --snapshot`（自动备份网络状态快照 + config）
+2. **脚本停顿，提示：** 请去 Ubuntu Server 管理面板（Proxmox/VMware/其他）创建虚拟机级别物理快照。完成后输入 `yes` 继续
+3. 用户明确回复 `yes` → 脚本继续
+4. 应用 TUN 配置（在 mixed 配置基础上增加 TUN 入站）
+5. 重启容器：`docker restart sing-box`
+6. 验证 TUN 功能
+
+> 为什么要物理快照？recovery.sh 只能恢复软件层面（路由/nftables/DNS/配置），无法应对：宿主机内核崩溃、磁盘损坏、Docker 版本升级不兼容、误删文件。物理快照是最后一道物理防线。
 
 **验证清单**：
 - [ ] SSH 不断连
@@ -346,7 +350,17 @@ Web UI 组件，以独立容器运行。
 
 ## 8. 灾难恢复
 
-### 8.1 备份机制
+### 8.1 关键概念区分
+
+| 操作 | 命令 | 时机 | 做什么 |
+|------|------|------|--------|
+| **快照备份** | `recovery.sh --snapshot` | 部署 TUN **之前** 执行 | 保存当前网络状态、DNS、配置、路由表到 `/etc/sing-box/`。**不是恢复操作，是预防性备份** |
+| **灾难恢复** | `recovery.sh --level1/2/3` | SSH 断开或网络故障 **之后** 执行 | 从快照恢复路由/nftables/DNS/配置。**这是恢复操作** |
+| **物理快照** | 手动操作 | 部署 TUN **之前**，脚本会停顿要求你做 | 在宿主机管理面板（Proxmox/VMware）创建虚拟机级别快照。recovery.sh 修不了内核崩溃或磁盘损坏 |
+
+简单理解：`--snapshot` ≈ 拍个"体检报告"，`--level1/2/3` ≈ 按报告治病。前者是预防，后者是治疗。
+
+### 8.2 备份机制
 
 部署前执行 `scripts/backup-network-state.sh`，保存：
 
@@ -359,7 +373,7 @@ Web UI 组件，以独立容器运行。
 | IP 地址 | `ip-addr.backup` | 恢复地址 |
 | mixed 模式 config | `config.json.mixed-backup` | 回退到 mixed 模式 |
 
-### 8.2 三级恢复 + 最后手段
+### 8.3 三级恢复 + 最后手段
 
 | 级别 | 命令 | 目标 | 场景 |
 |------|------|------|------|
@@ -368,7 +382,7 @@ Web UI 组件，以独立容器运行。
 | 三级 | `recovery.sh --level3` | 系统还原 | 完全清理 sing-box，回退到部署前 |
 | 最后手段 | `recovery.sh --last-resort` | 重启恢复 | 以上全部失败，禁用容器自启 + reboot |
 
-### 8.3 恢复顺序
+### 8.4 恢复顺序
 
 ```
 网络中断
