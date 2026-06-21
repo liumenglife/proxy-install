@@ -296,10 +296,10 @@ fi
 NODES=$(jq -c '.outbounds[] | select(.type != "direct" and .type != "block" and .type != "dns" and .type != "urltest" and .type != "selector")' "$NODES_FILE")
 TAGS=$(echo "$NODES" | jq -r '.tag')
 
-# 提取地区前缀（tag 第一段，如 HK-xxx → HK）
+# 提取地区前缀（tag 第一段，如 香港-xxx → 香港）
 REGIONS=$(echo "$TAGS" | sed 's/-.*//' | sort -u)
 
-# 提取机场信息（tag 第二段，如 HK-机场A-节点1 → 机场A）
+# 提取机场信息（tag 第二段，如 香港-机场A-节点1 → 机场A）
 AIRPORTS=$(echo "$TAGS" | awk -F- '{print $2}' | sort -u)
 
 # 按节点列表生成全部节点 tag 数组
@@ -723,8 +723,8 @@ sudo bash scripts/deploy.sh --phase2
 - 切换后 route.final 自动更新
 
 **实际路由标签**（只读显示）：
-- 自动模式：`全部聚合/自动组 → HK-节点3`
-- 手动模式：`按地区/香港/手动组 → HK-节点2`
+- 自动模式：`全部聚合/自动组 → 香港-节点3`
+- 手动模式：`按地区/香港/手动组 → 香港-节点2`
 
 ### 操作方式
 
