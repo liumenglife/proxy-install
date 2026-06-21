@@ -102,7 +102,7 @@
 version: "3.8"
 services:
   sing-box:
-    image: ghcr.io/sagernet/sing-box:v1.11.0
+    image: ghcr.io/sagernet/sing-box:v1.13.13
     container_name: sing-box
     restart: unless-stopped
     network_mode: "host"
@@ -116,7 +116,7 @@ services:
       - TZ=Asia/Shanghai
 ```
 
-- 版本锁定：`v1.11.0`（或 Plan 阶段确认的最新稳定版），禁止使用 `latest`
+- 版本锁定：`v1.13.13`（当前最新稳定版），禁止使用 `latest`
 - `network_mode: host`：共享宿主机网络栈，sing-box 可直接操作路由和 nftables
 - `cap_add NET_ADMIN`：允许容器修改网络配置（路由表、nftables）
 - `/dev/net/tun`：TUN 虚拟网卡设备
@@ -453,6 +453,6 @@ route.final = "select" (selector)
 
 ## 12. 开放问题
 
-- sing-box 具体版本号：Plan 阶段确认当前最新稳定版，锁定为具体版本（如 `v1.11.x`）
+- sing-box 版本升级策略：锁定 `v1.13.13`，升级需在开发环境验证后再更新
 - sub-store 与 sing-box 配置合并方式：`!include` vs 模板渲染，Plan 阶段决定
 - sub-store 持久化卷路径及权限设计
