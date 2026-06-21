@@ -50,7 +50,7 @@
 │  │         │           │ /etc/sing-box/outbounds.json  │ │
 │  │         │           └──────────┘                    │ │
 │  │         │                                           │ │
- │  │                                                       │ │
+│  │                                                       │ │
 │  │            ┌──────────┐                                │ │
 │  │            │MetaCubeXD│                                │ │
 │  │            │(Web UI)  │                                │ │
@@ -72,9 +72,11 @@
 
 **sing-box**：流量路由核心。接收 TUN 入站（所有流量）或 mixed 入站（SOCKS5/HTTP），按规则集匹配出站协议，转发到目标服务器。
 
-**MetaCubeXD**：Web 控制面板。通过 sing-box Clash API（:9090）获取节点列表、切换节点、查看延迟。独立容器运行。
+**MetaCubeXD**：Web 控制面板。通过 sing-box Clash API（:9090）获取代理组列表、切换节点、查看延迟。独立容器运行。自动组（urltest）在 UI 中设为只读，手动组（selector）允许选择具体节点。
 
-**sub-store**：订阅管理。Web GUI 管理多机场订阅、合并输出 sing-box 格式配置。独立容器运行。
+**sub-store**：订阅管理。Web GUI 管理多机场订阅、合并输出 sing-box 格式配置。为每个节点生成标签（tag），标签命名需包含机场来源和地区信息，用于分组脚本自动归类。
+
+**分组后处理脚本**：读取 sub-store 输出的节点列表，按标签中的机场/地区信息自动生成三层分组结构（全部聚合/按机场/按地区），每层包含自动组和手动组。输出完整的 outbounds 配置。
 
 **Docker**：运行环境。`--network host` 共享宿主机网络栈 + `--cap-add NET_ADMIN` 操作路由/nftables。
 
@@ -148,28 +150,51 @@ services:
     }
   ],
   "outbounds": [
-    // 订阅转换后自动生成的节点列表，每个节点有唯一 tag
-    // 至少包含一个 selector 类型的"手动选择"组
-    { "type": "selector", "tag": "select", "outbounds": ["auto", "节点A", "节点B", ...] },
-    { "type": "urltest", "tag": "auto", "outbounds": ["节点A", "节点B", ...] },
+    // ── 内置出站 ──
     { "type": "direct", "tag": "direct" },
-    { "type": "block", "tag": "block" }
+    { "type": "block", "tag": "block" },
+    { "type": "dns", "tag": "dns-out" },
+
+    // ── 节点列表（由 sub-store + 分组脚本自动生成）──
+    // 每个节点有唯一 tag，命名格式: [地区前缀]-[机场前缀]-[节点名]
+    // 如: HK-机场A-节点1, JP-机场B-节点2
+
+    // ── 全部聚合分组 ──
+    { "type": "urltest", "tag": "全部聚合/自动组", "outbounds": ["HK-...", "JP-...", "SG-...", "US-...", "其他节点..."], "interval": "20s" },
+    { "type": "selector", "tag": "全部聚合/手动组", "outbounds": ["HK-...", "JP-...", "所有节点..."] },
+
+    // ── 按机场分组 ──
+    { "type": "urltest", "tag": "按机场/机场A/自动组", "outbounds": ["机场A的节点..."], "interval": "20s" },
+    { "type": "selector", "tag": "按机场/机场A/手动组", "outbounds": ["机场A的节点..."] },
+    { "type": "urltest", "tag": "按机场/机场B/自动组", "outbounds": ["机场B的节点..."], "interval": "20s" },
+    { "type": "selector", "tag": "按机场/机场B/手动组", "outbounds": ["机场B的节点..."] },
+
+    // ── 按地区分组 ──
+    { "type": "urltest", "tag": "按地区/香港/自动组", "outbounds": ["HK-节点1", "HK-节点2", ...], "interval": "20s" },
+    { "type": "selector", "tag": "按地区/香港/手动组", "outbounds": ["HK-节点1", "HK-节点2", ...] },
+    { "type": "urltest", "tag": "按地区/日本/自动组", "outbounds": ["JP-节点1", "JP-节点2", ...], "interval": "20s" },
+    { "type": "selector", "tag": "按地区/日本/手动组", "outbounds": ["JP-节点1", "JP-节点2", ...] },
+    { "type": "urltest", "tag": "按地区/新加坡/自动组", "outbounds": ["SG-节点1", "SG-节点2", ...], "interval": "20s" },
+    { "type": "selector", "tag": "按地区/新加坡/手动组", "outbounds": ["SG-节点1", "SG-节点2", ...] },
+    { "type": "urltest", "tag": "按地区/美国/自动组", "outbounds": ["US-节点1", "US-节点2", ...], "interval": "20s" },
+    { "type": "selector", "tag": "按地区/美国/手动组", "outbounds": ["US-节点1", "US-节点2", ...] }
   ],
   "route": {
     "rules": [
-      { "rule_set": ["geosite-cn"], "outbound": "direct" }
+      { "protocol": "dns", "outbound": "dns-out" },
+      { "rule_set": ["geosite-cn"], "outbound": "direct" },
+      { "port": 22, "outbound": "direct" }
     ],
     "rule_set": [
-      { "tag": "geosite-cn", "type": "remote", "url": "https://...", "download_detour": "direct" }
+      { "tag": "geosite-cn", "type": "remote", "url": "https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-cn.srs", "download_detour": "direct" }
     ],
-    "final": "select",
+    "final": "全部聚合/自动组",
     "auto_detect_interface": true
   },
   "experimental": {
-    "cache_file": { "enabled": true },
+    "cache_file": { "enabled": true, "store_fakeip": true },
     "clash_api": {
       "external_controller": "0.0.0.0:9090",
-      "external_ui": "ui",
       "default_mode": "rule"
     }
   }
@@ -177,8 +202,10 @@ services:
 ```
 
 关键约束：
-- `route.final` 必须指向 `"select"`（selector），不能指向 `"auto"`（urltest）。指向 auto 时手动选节点不生效。
-- `cache_file.enabled: true`：持久化 Web UI 的选择和配置，重启后保留上次选择的节点。
+- `route.final` 默认指向 `"全部聚合/自动组"`（urltest）。用户切换组时后端自动更新 `route.final` 指向目标组。
+- 自动组（urltest）设置 `"interval": "20s"`，20 秒批量测试一次延迟，接近准实时。
+- 手动组（selector）outbounds 只挂节点，不挂其他子组——所有组并列，没有嵌套。
+- `cache_file.enabled: true`：持久化 Web UI 的选择和配置，重启后保留上次选择的节点和组。
 - `set_system_proxy: false`：mixed 模式时不修改系统代理设置（TUN 模式接管全部流量）。
 
 #### 第二阶段增量（TUN 模式）
@@ -403,30 +430,111 @@ Web UI 组件，以独立容器运行。
                  └─► OK ✓ / 仍有问题 → --last-resort
 ```
 
-## 9. 节点管理策略
+## 9. 节点分组策略
 
-### 9.1 节点来源
+### 9.1 分组结构
 
-- 订阅链接 → 经订阅转换器（sub-store / subconverter）转为 sing-box 格式
-- 转换结果合并到 outbounds 数组
-- 每个节点有唯一 tag
+全部节点按三个维度并列分组，每组包含自动组（urltest）和手动组（selector），**所有组平级，无嵌套**：
 
-### 9.2 不可用节点处理
+**全部聚合维度：**
 
-- urltest 标记不可用的节点保留在 outbounds 列表中
-- 原因：机场节点可能因 GWF 封锁暂时不可用，下午/晚上可能恢复
-- 用户可通过 Web UI 手动尝试切换
+| 组名 | 类型 | 成员 | 用途 |
+|------|------|------|------|
+| 全部聚合/自动组 | urltest（interval: 20s） | 全部节点 | 全局 urltest 自动选最优 |
+| 全部聚合/手动组 | selector | 全部节点 | 从全局节点中手动挑一个 |
 
-### 9.3 节点选择机制
+**按机场维度：**
 
-```
-route.final = "select" (selector)
-                    │
-          ┌─────────┴──────────┐
-          ▼                    ▼
-    手动选择节点          urltest 不可用时
-    流量走选定节点        显示不可用但保留
-```
+| 组名 | 类型 | 成员 |
+|------|------|------|
+| 按机场/机场A/自动组 | urltest（interval: 20s） | 机场A 的所有节点 |
+| 按机场/机场A/手动组 | selector | 机场A 的所有节点 |
+| 按机场/机场B/自动组 | urltest（interval: 20s） | 机场B 的所有节点 |
+| 按机场/机场B/手动组 | selector | 机场B 的所有节点 |
+
+**按地区维度：**
+
+| 组名 | 类型 | 成员 |
+|------|------|------|
+| 按地区/香港/自动组 | urltest（interval: 20s） | 香港节点 |
+| 按地区/香港/手动组 | selector | 香港节点 |
+| 按地区/日本/自动组 | urltest（interval: 20s） | 日本节点 |
+| 按地区/日本/手动组 | selector | 日本节点 |
+| 按地区/新加坡/自动组 | urltest（interval: 20s） | 新加坡节点 |
+| 按地区/新加坡/手动组 | selector | 新加坡节点 |
+| 按地区/美国/自动组 | urltest（interval: 20s） | 美国节点 |
+| 按地区/美国/手动组 | selector | 美国节点 |
+
+其他地区（台湾、韩国、英国等）按实际节点数据动态添加。
+
+**三项分组必须全部实现才允许上线，缺一不可。**
+
+### 9.2 节点来源与命名
+
+- 订阅链接 → sub-store 转换为 sing-box 格式节点列表
+- 分组后处理脚本读取节点列表，按 tag 中的机场/地区信息自动生成分组结构
+- 节点命名规范（sub-store 输出时需确保 tag 包含前缀）：
+  - `HK-机场A-节点名`
+  - `JP-机场B-节点名`
+- 分组脚本通过前缀解析节点归属：
+  - 机场维度：取 tag 第二段
+  - 地区维度：取 tag 第一段
+
+### 9.3 代理选择器（Web UI）
+
+**自动分组选择器（读写）：**
+- 下拉列表，列出所有自动组
+- 默认选中：`全部聚合/自动组`
+- 用户切换时后端更新 `route.final` 指向目标组
+- 用户选了什么就是什么，刷新/重启不重置（`cache_file` 持久化）
+
+**实际路由标签（只读）：**
+- 纯显示，反映当前 `route.final` 的完整路径
+- 自动模式：`全部聚合/自动组 → HK-节点3`
+- 手动模式：`按地区/香港/手动组 → HK-节点2`
+- 自动模式下显示的节点是 urltest 当前选中，刷新可能变化
+
+### 9.4 操作流程
+
+**自动模式：**
+1. Web UI → 自动分组选择器 → 选 `按地区/香港/自动组`
+2. `route.final` 更新为 `按地区/香港/自动组`
+3. urltest 每 20 秒测延迟，自动选香港最快节点
+4. 实际路由标签显示：`按地区/香港/自动组 → HK-节点3`
+
+**手动模式：**
+1. Web UI → 直接打开任意手动组（如 `按地区/香港/手动组`）
+2. 选 `HK-节点2`
+3. `route.final` 更新为 `按地区/香港/手动组` + 在该组内选中 `HK-节点2`
+4. 代理选择器反向更新为 `按地区/香港/手动组`
+5. 实际路由标签显示：`按地区/香港/手动组 → HK-节点2`
+
+**自动组只读：** 用户在自动组中点击节点 → 弹出提示"自动组不可手动选择，请去对应手动组选择"
+
+### 9.5 urltest 实时性
+
+- 自动组设置 `"interval": "20s"`，每 20 秒批量测试一次全部节点延迟
+- 测试结果缓存 20 秒，供 Web UI 展示和路由选择
+- 不是实时 ping，但 20 秒间隔已接近准实时，足以在节点故障后快速切换
+
+### 9.6 不可用节点处理
+
+- urltest 标记不可用的节点保留在 outbounds 列表中，不删除
+- 原因：GWF 封锁通常是暂时的，下午/晚上可能恢复
+- 用户可通过手动组随时尝试切换
+
+### 9.7 分组后处理脚本
+
+创建 `/home/lm/soft-install/proxy-install/scripts/group-nodes.sh`：
+
+输入：sub-store 输出的节点列表 JSON（各节点有 tag）
+处理逻辑：
+1. 读取所有节点 tag，提取地区前缀和机场信息
+2. 按地区去重，生成本地地区组列表
+3. 按机场去重，生成机场组列表
+4. 构建全部聚合组（所有节点）
+5. 输出完整的 outbounds 配置 JSON（含 urltest 和 selector 分组）
+输出：sing-box 可直接使用的 outbounds 配置片段
 
 ## 10. 验收标准
 
@@ -446,24 +554,36 @@ route.final = "select" (selector)
 - [ ] 容器异常停止后不影响 SSH
 - [ ] 配置错误时 recovery.sh 可在 5 分钟内恢复网络（RTO ≤ 5 min）
 
-### 10.3 兼容性验收
+### 10.3 分组验收
 
-- [ ] 核心地区（香港/日本/新加坡/美国）每个至少一个稳定可用节点
-- [ ] 可用节点比例 ≥ 60%
-- [ ] 至少 3 种协议类型节点正常工作
-- [ ] 订阅更新后新节点自动生效
+- [ ] 全部聚合/自动组 + 手动组 正常显示
+- [ ] 按机场/每组自动组 + 手动组 正常显示
+- [ ] 按地区/每组自动组 + 手动组 正常显示
+- [ ] 三种分组全部实现，缺一不可
+
+### 10.4 路由切换验收
+
+- [ ] 自动分组选择器列出所有自动组，默认选中"全部聚合/自动组"
+- [ ] 切换自动组 → `route.final` 更新 → 出口 IP 变化
+- [ ] 手动组选节点 → `route.final` 更新 → 出口 IP 变化
+- [ ] 实际路由标签显示完整路径（组名 → 节点名）
+- [ ] 自动组中点击节点 → 弹出提示不可选
+- [ ] 刷新页面后路由状态保持
+- [ ] 容器重启后路由状态保持
 
 ## 11. 部署文件清单
 
 | 文件 | 用途 |
 |------|------|
 | `docker-compose.yml` | Docker Compose 编排（sing-box + MetaCubeXD + sub-store） |
-| `configs/sing-box/mixed.json` | 第一阶段 mixed 配置 |
-| `configs/sing-box/tun.json` | 第二阶段 TUN 增量配置 |
+| `configs/sing-box/mixed.json` | 第一阶段 mixed 配置（含分组结构骨架） |
+| `configs/sing-box/tun-inbound.json` | 第二阶段 TUN 增量配置 |
 | `configs/sub-store/sub-store.conf` | sub-store 配置文件 |
 | `scripts/backup-network-state.sh` | 网络状态快照备份 |
+| `scripts/group-nodes.sh` | 分组后处理脚本（自动生成三层分组） |
 | `recovery.sh` | 三级灾难恢复脚本 |
 | `scripts/deploy.sh` | 一键部署脚本 |
+| `README.md` | 部署文档 + 术语表 |
 
 ## 12. 开放问题
 
