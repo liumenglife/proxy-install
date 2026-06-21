@@ -112,20 +112,27 @@ sing-box 容器：
 - bind_interface 强制 sing-box 自身流量走物理网卡
 - 不依赖节点 IP 排除（机场 CDN 动态 IP 变化太快，维护成本高且不可靠）
 
-第二道：恢复脚本复原
-- 部署前运行 scripts/backup-network-state.sh 保存网络状态快照
-- 灾难时通过 IPMI/控制台执行 recovery.sh 恢复（已经写好）
-- **注意：recovery.sh 只能恢复路由 / nftables / DNS，不能保证修复配置错误、版本升级损坏、容器异常状态。** 有 recovery 不等于万无一失。
+第二道：恢复脚本复原（三级恢复）
+recovery.sh 具备三级恢复能力，覆盖从 SSH 中断到系统完全回滚的所有场景：
 
-第三道：分阶段上线（最重要的一道）
+| 级别 | 目标 | 恢复内容 | 验收标准 |
+|------|------|----------|----------|
+| 一级 | 恢复 SSH | 删 TUN / 删路由 / 清 nftables / 恢复网关 / 恢复 DNS | SSH 可连, curl 百度成功 |
+| 二级 | 回退 mixed | 一级 + 回滚 config.json + 重启容器 mixed 模式 | MetaCubeXD + API + 代理正常 |
+| 三级 | 系统还原 | 二级 + 导入备份快照 / 恢复 resolv.conf / nftables / 路由 / 清 Docker | 网络状态与部署前一致 |
+- 部署前运行 scripts/backup-network-state.sh（保存网关/网卡/DNS/nftables/路由表/当前配置）
+- recovery.sh 放置于 /home/lm/soft-install/proxy-install/recovery.sh
+- 可通 IPMI/物理控制台执行 sudo bash recovery.sh 一键恢复
+
+第三道：开 TUN 前强制演练
+- 在第二阶段部署 TUN 之前，必须先做一次灾难演练
+- 演练流程：人工删除默认路由（模拟 TUN 故障）→ 执行 recovery.sh --level1 → 验证 SSH + 网络恢复
+- **演练不通过，不允许进入 TUN 阶段**
+
+第四道：分阶段上线（最重要的一道）
 - 第一阶段不开 TUN，只用 mixed 端口模式——完全不碰路由表
 - 确认所有功能正常后，第二阶段再加 TUN
 - 详见下文"强制分阶段上线策略"
-
-### 兜底方案
-- 部署前必须执行 backup-network-state.sh（保存网关/网卡信息）
-- recovery.sh 放置在 /home/lm/soft-install/proxy-install/recovery.sh
-- 可通 IPMI/物理控制台执行 sudo bash recovery.sh 一键恢复
 
 ---
 
