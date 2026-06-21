@@ -104,22 +104,20 @@ sing-box 容器：
 理由二：CDN 回源 IP 变化（Cloudflare 等 CDN 的 IP 会动态调整）
 理由三：配置写错（字段 typo，route_exclude_address_set 拼错，SSH 直接断）
 
-**四道防护（按强度排序）：**
+**三道防护（按强度排序）：**
 
 第一道：正确配置排除规则
 - route_exclude_address_set 排除局域网网段（192.168.0.0/16）
 - 路由规则 SSH 端口（22）直连 direct 出站
 - bind_interface 强制 sing-box 自身流量走物理网卡
+- 不依赖节点 IP 排除（机场 CDN 动态 IP 变化太快，维护成本高且不可靠）
 
-第二道：动态排除方案（解决机场换 IP 问题）
-- 用 rule_set 从远程规则集中动态获取节点 IP 段
-- 或直接用 process_name 匹配 sshd 进程直连（进程名规则不受 IP 变化影响）
-
-第三道：恢复脚本复原
+第二道：恢复脚本复原
 - 部署前运行 scripts/backup-network-state.sh 保存网络状态快照
 - 灾难时通过 IPMI/控制台执行 recovery.sh 恢复（已经写好）
+- **注意：recovery.sh 只能恢复路由 / nftables / DNS，不能保证修复配置错误、版本升级损坏、容器异常状态。** 有 recovery 不等于万无一失。
 
-第四道：分阶段上线（最重要的一道）
+第三道：分阶段上线（最重要的一道）
 - 第一阶段不开 TUN，只用 mixed 端口模式——完全不碰路由表
 - 确认所有功能正常后，第二阶段再加 TUN
 - 详见下文"强制分阶段上线策略"
@@ -215,6 +213,17 @@ sing-box 的模块化架构是 adapter 模式，添加新协议只需新增 adap
 
 这是整个方案中最重要的部分，绝不可以跳过。
 
+### 决策门：本方案的真正目标是最大化机场兼容性，而非协议覆盖率
+
+整个方案的隐含优先级是：
+1. **机场兼容率 > 协议覆盖率**（压倒性优先）
+2. 90% 以上的机场节点在 sing-box 上正常工作
+3. 如果 sing-box 不行，允许换后端
+
+下面的第一阶段结束时有一个硬性决策门。
+
+---
+
 ### 第一阶段：mixed 端口模式（第 1-3 天）
 
 目标：完全不动路由表，验证所有核心功能
@@ -224,13 +233,38 @@ sing-box 的模块化架构是 adapter 模式，添加新协议只需新增 adap
 - 不开 TUN，不开 auto_route
 - Clash API + MetaCubeXD 正常开启
 
-验证清单（每项都必须确认通过才能进入第二阶段）：
-- 多机场订阅能正常导入和更新
-- MetaCubeXD 能正确显示节点列表
-- 手动在 MetaCubeXD 切换到不同节点，curl 验证出口 IP 变化
+验证清单（每项都必须确认通过才能进入下一阶段）：
+
+**一、路由与配置验证**
 - Selector 组配置正确，route.final 指向 select 而非 urltest
 - cache_file 持久化生效，重启容器后手动选择仍保留
+
+**二、route.final = select 的实际生效验证（这是最重要的验证）**
+```
+在 MetaCubeXD 切换到"香港"节点:
+  curl ipinfo.io   → 确认 IP 在香港
+在 MetaCubeXD 切换到"日本"节点:
+  curl ipinfo.io   → 确认 IP 在日本
+在 MetaCubeXD 切换到"美国"节点:
+  curl ipinfo.io   → 确认 IP 在美国
+```
+如果切换节点后出口 IP 没变 → route.final 没有指向 select，配置有误
+
+**三、多协议验证**
 - 所有的协议节点至少有一个能正常工作
+
+**四、网络工具验证**
+```
+curl -x socks5://127.0.0.1:7890 https://www.google.com   → 200 OK
+curl ip.sb                                                      → 出口 IP
+curl ipinfo.io                                                  → 位置信息
+dig @8.8.8.8 google.com                                         → DNS 解析正常
+ping -c 3 8.8.8.8                                               → 延迟正常
+```
+
+**五、订阅管理**
+- 多机场订阅能正常导入和更新
+- MetaCubeXD 能正确显示节点列表
 
 关于节点可用性的重要说明：
 - 第一次导入订阅后，总有一些节点显示不可用——这很正常
@@ -240,6 +274,19 @@ sing-box 的模块化架构是 adapter 模式，添加新协议只需新增 adap
 - 不可用节点保留在 outbounds 列表中，方便你在 MetaCubeXD 上随时手动重试
 
 SSH 状态：完全不受影响（没有改任何路由）
+
+**第一阶段结束后触发的决策门：**
+
+```
+统计可用节点数 / 总节点数 >= 90% ？
+  → 是：继续使用 sing-box，进入第二阶段
+  → 否：召开设计评审，评估切换后端为 Mihomo
+```
+
+Mihomo 虽缺少 anytls 协议，但机场兼容性在某些场景下高于 sing-box。
+切换后协议覆盖减少，但机场可用性可能提升。
+
+这个决策门确保不会过早锁死 sing-box。
 
 ### 第二阶段：TUN 透明代理（第 4 天起）
 
@@ -254,8 +301,9 @@ SSH 状态：完全不受影响（没有改任何路由）
 - 在 inbounds 中新增 TUN 入站
 - 开启 auto_route + auto_redirect
 - 保留 mixed 入站作为备用入口
-- route_exclude_address_set 排除局域网和节点 IP
+- route_exclude_address_set 排除局域网（192.168.0.0/16，含你宿主机 192.168.100.135）
 - 路由规则 SSH 22 端口直连
+- 不依赖节点 IP 排除（机场 CDN 动态 IP 变化太快，维护成本高且不可靠）
 
 验证：
 - 先小范围确认（curl 验证出口 IP 与 MetaCubeXD 显示一致）
