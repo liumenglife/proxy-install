@@ -578,7 +578,6 @@ Web UI 组件，以独立容器运行。
 | `docker-compose.yml` | Docker Compose 编排（sing-box + MetaCubeXD + sub-store） |
 | `configs/sing-box/mixed.json` | 第一阶段 mixed 配置（含分组结构骨架） |
 | `configs/sing-box/tun-inbound.json` | 第二阶段 TUN 增量配置 |
-| `configs/sub-store/sub-store.conf` | sub-store 配置文件 |
 | `scripts/backup-network-state.sh` | 网络状态快照备份 |
 | `scripts/group-nodes.sh` | 分组后处理脚本（自动生成三层分组） |
 | `recovery.sh` | 三级灾难恢复脚本 |

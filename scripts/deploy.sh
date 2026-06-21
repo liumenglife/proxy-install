@@ -14,10 +14,8 @@ ENV_FILE="$BASE_DIR/.env"
 COMPOSE_FILE="$BASE_DIR/docker-compose.yml"
 MIXED_CONFIG="$BASE_DIR/configs/sing-box/mixed.json"
 TUN_INBOUND="$BASE_DIR/configs/sing-box/tun-inbound.json"
-SING_BOX_CONFIG_DIR="/etc/sing-box"
-TARGET_CONFIG="$SING_BOX_CONFIG_DIR/config.json"
-SUB_STORE_DATA_DIR="/etc/sub-store"
 GROUP_SCRIPT="$BASE_DIR/scripts/group-nodes.sh"
+# SING_BOX_CONFIG_DIR / SUB_STORE_DATA_DIR 在 load_env 后设 fallback
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -44,6 +42,12 @@ load_env() {
         source "$ENV_FILE"
         set +a
     fi
+}
+
+env_init() {
+    SING_BOX_CONFIG_DIR="${SING_BOX_CONFIG_DIR:-/etc/sing-box}"
+    SUB_STORE_DATA_DIR="${SUB_STORE_DATA_DIR:-/etc/sub-store}"
+    TARGET_CONFIG="$SING_BOX_CONFIG_DIR/config.json"
 }
 
 ensure_dirs() {
@@ -76,15 +80,19 @@ phase1() {
     # 3. 启动 Docker Compose
     echo "[3] 启动 Docker Compose..."
     cd "$BASE_DIR" && docker compose up -d
-    sleep 3
 
-    # 4. 验证容器状态
-    echo "[4] 验证容器状态..."
+    # 4. 等待容器就绪
+    echo "[4] 等待容器就绪..."
     for name in sing-box sub-store metacubexd; do
-        if docker ps --format '{{.Names}}' | grep -q "$name"; then
-            echo -e "  ${GREEN}$name 运行中${NC}"
-        else
-            echo -e "  ${RED}$name 未启动${NC}"
+        for i in $(seq 1 10); do
+            if docker ps --format '{{.Names}}' | grep -q "$name"; then
+                echo -e "  ${GREEN}$name 运行中${NC}"
+                break
+            fi
+            sleep 1
+        done
+        if ! docker ps --format '{{.Names}}' | grep -q "$name"; then
+            echo -e "  ${RED}$name 启动超时${NC}"
             docker logs "$name" 2>/dev/null | tail -5
         fi
     done
@@ -111,15 +119,19 @@ phase1() {
     echo "     - 保存输出文件到 /etc/sub-store/nodes.json"
     echo ""
     echo "  2. 运行分组脚本生成 outbounds:"
-    echo "     sudo bash $GROUP_SCRIPT /etc/sub-store/nodes.json"
-    echo "     将输出的 outbounds 合并到 $TARGET_CONFIG"
+    echo "     sudo bash $GROUP_SCRIPT /etc/sub-store/nodes.json > /tmp/outbounds.json"
     echo ""
-    echo "  3. 重启容器: docker restart sing-box"
+    echo "  3. 合并 outbounds 到配置:"
+    echo "     jq -s '.[0].outbounds = .[1] | .[0]' \\"
+    echo "       $TARGET_CONFIG /tmp/outbounds.json > /tmp/config-merged.json"
+    echo "     sudo mv /tmp/config-merged.json $TARGET_CONFIG"
     echo ""
-    echo "  4. 打开 Web UI: http://192.168.100.135:9091"
+    echo "  4. 重启容器: docker restart sing-box"
+    echo ""
+    echo "  5. 打开 Web UI: http://192.168.100.135:9091"
     echo "     验证节点加载和切换"
     echo ""
-    echo "  5. 验收检查:"
+    echo "  6. 验收检查:"
     echo "     - 自动分组选择器默认显示: 全部聚合/自动组"
     echo "     - 切一个自动组 → curl ipinfo.io 验证出口"
     echo "     - 选手动组节点 → 路由标签自动更新"
@@ -135,7 +147,10 @@ phase2() {
     echo "========== 第二阶段: TUN 模式 =========="
     echo ""
 
-    # 1. 检查第一阶段就绪
+    # 1. 确保目标目录存在
+    ensure_dirs
+
+    # 2. 检查第一阶段就绪
     if [ ! -f "$TARGET_CONFIG" ]; then
         echo -e "${RED}未检测到 config.json，请先执行 --phase1${NC}"
         exit 1
@@ -145,15 +160,15 @@ phase2() {
         exit 1
     fi
 
-    # 2. 自动快照备份
-    echo "[1] 自动快照备份..."
+    # 3. 自动快照备份
+    echo "[3] 自动快照备份..."
     bash "$BASE_DIR/recovery.sh" --snapshot
     if [ $? -ne 0 ]; then
         echo -e "${RED}快照备份失败，终止部署${NC}"
         exit 1
     fi
 
-    # 3. 物理快照提示 — 停顿等待用户确认
+    # 4. 物理快照提示 — 停顿等待用户确认
     echo ""
     echo "================================================================"
     echo "  请去 Ubuntu Server 管理面板（Proxmox/VMware/其他）"
@@ -171,9 +186,9 @@ phase2() {
         exit 0
     fi
 
-    # 4. 强制演练检查
+    # 5. 强制演练检查
     echo ""
-    echo "[2] 检查演练是否通过..."
+    echo "[5] 检查演练是否通过..."
     echo "  开 TUN 前必须通过: sudo bash recovery.sh --drill"
     echo ""
     echo -n "  演练已通过？输入 yes 继续，no 取消: "
@@ -183,29 +198,38 @@ phase2() {
         exit 0
     fi
 
-    # 5. 合并 TUN 配置到现有 config.json
-    echo "[3] 合并 TUN 入站配置..."
+    # 6. 合并 TUN 配置到现有 config.json
+    echo "[6] 合并 TUN 入站配置..."
     jq -s '.[0].inbounds += .[1].inbounds_add | .[0]' \
         "$TARGET_CONFIG" "$TUN_INBOUND" > /tmp/config-tmp.json
     mv /tmp/config-tmp.json "$TARGET_CONFIG"
     echo "  已合并 TUN 入站到 $TARGET_CONFIG"
 
-    # 6. 重启容器
-    echo "[4] 重启 sing-box 容器..."
+    # 7. 重启容器
+    echo "[7] 重启 sing-box 容器..."
     docker restart sing-box
-    sleep 3
+    for i in $(seq 1 10); do
+        if docker ps --format '{{.Names}}' | grep -q "sing-box"; then
+            echo -e "  ${GREEN}sing-box 运行中${NC}"
+            break
+        fi
+        sleep 1
+    done
 
-    # 7. 验证 API
-    echo "[5] 验证 API..."
+    # 8. 验证 API
+    echo "[8] 验证 API..."
     for i in $(seq 1 10); do
         if curl -s --connect-timeout 2 "http://127.0.0.1:9090/configs" &>/dev/null; then
             echo -e "  ${GREEN}sing-box API 就绪${NC}"
             break
         fi
+        if [ "$i" -eq 10 ]; then
+            echo -e "  ${YELLOW}API 未就绪，可稍后手动检查${NC}"
+        fi
         sleep 2
     done
 
-    # 8. TUN 网卡检查
+    # 9. TUN 网卡检查
     echo ""
     echo "  TUN 网卡:"
     ip link show tun0 2>/dev/null && echo -e "  ${GREEN}tun0 已创建${NC}" || echo -e "  ${YELLOW}tun0 未检测到（可忽略）${NC}"
@@ -230,6 +254,7 @@ phase2() {
 # ========================================
 check_deps
 load_env
+env_init
 ensure_dirs
 
 case "${1:-}" in
