@@ -21,7 +21,7 @@ TAGS=$(echo "$NODES" | jq -r '.tag')
 # 提取地区前缀（tag 第一段，连字符前，如 香港-xxx → 香港）
 REGIONS=$(echo "$TAGS" | sed 's/-.*//' | sort -u)
 
-# 提取机场信息（tag 第二段，如 香港-机场A-节点1 → 机场A）
+# 提取机场信息（tag 第二段，如 香港-机场A-{节点名} → 机场A）
 AIRPORTS=$(echo "$TAGS" | awk -F- '{print $2}' | sort -u)
 
 # 全部节点 tag 数组
