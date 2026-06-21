@@ -2,6 +2,7 @@ services:
   sing-box:
     image: ${SING_BOX_IMAGE}
     container_name: sing-box
+    command: run -c /etc/sing-box/config.json
     restart: unless-stopped
     network_mode: "host"
     cap_add:
@@ -19,7 +20,8 @@ services:
     container_name: sub-store
     restart: unless-stopped
     ports:
-      - "9001:9001"
+      - "9001:3001"
+      - "9002:3000"
     volumes:
       - ${SUB_STORE_DATA_DIR}:/opt/sub-store
     environment:
