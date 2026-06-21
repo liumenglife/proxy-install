@@ -1,0 +1,243 @@
+#!/bin/bash
+# ========================================
+#  sing-box TUN 透明代理一键部署脚本
+# ========================================
+# 使用方式:
+#   sudo bash scripts/deploy.sh --phase1    第一阶段: mixed 模式
+#   sudo bash scripts/deploy.sh --phase2    第二阶段: TUN 模式
+# ========================================
+
+export PATH="/usr/sbin:/usr/bin:/sbin:/bin"
+
+BASE_DIR="/home/lm/soft-install/proxy-install"
+ENV_FILE="$BASE_DIR/.env"
+COMPOSE_FILE="$BASE_DIR/docker-compose.yml"
+MIXED_CONFIG="$BASE_DIR/configs/sing-box/mixed.json"
+TUN_INBOUND="$BASE_DIR/configs/sing-box/tun-inbound.json"
+SING_BOX_CONFIG_DIR="/etc/sing-box"
+TARGET_CONFIG="$SING_BOX_CONFIG_DIR/config.json"
+SUB_STORE_DATA_DIR="/etc/sub-store"
+GROUP_SCRIPT="$BASE_DIR/scripts/group-nodes.sh"
+
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m'
+
+if [ "$(id -u)" -ne 0 ]; then
+    echo "必须用 root 或 sudo 执行"
+    exit 1
+fi
+
+check_deps() {
+    for cmd in docker jq; do
+        if ! command -v "$cmd" &>/dev/null; then
+            echo "缺少依赖: $cmd"
+            exit 1
+        fi
+    done
+}
+
+load_env() {
+    if [ -f "$ENV_FILE" ]; then
+        set -a
+        source "$ENV_FILE"
+        set +a
+    fi
+}
+
+ensure_dirs() {
+    for d in "$SING_BOX_CONFIG_DIR" "$SUB_STORE_DATA_DIR"; do
+        [ -d "$d" ] || mkdir -p "$d"
+    done
+}
+
+# ========================================
+# 第一阶段: mixed 模式
+# ========================================
+phase1() {
+    echo ""
+    echo "========== 第一阶段: mixed 模式 =========="
+    echo ""
+
+    # 1. 备份网络状态
+    echo "[1] 备份当前网络状态..."
+    bash "$BASE_DIR/scripts/backup-network-state.sh"
+    if [ $? -ne 0 ]; then
+        echo -e "${RED}网络备份失败，终止部署${NC}"
+        exit 1
+    fi
+
+    # 2. 复制 mixed 配置到目标位置
+    echo "[2] 复制 mixed 配置到 $TARGET_CONFIG"
+    cp "$MIXED_CONFIG" "$TARGET_CONFIG"
+    chmod 644 "$TARGET_CONFIG"
+
+    # 3. 启动 Docker Compose
+    echo "[3] 启动 Docker Compose..."
+    cd "$BASE_DIR" && docker compose up -d
+    sleep 3
+
+    # 4. 验证容器状态
+    echo "[4] 验证容器状态..."
+    for name in sing-box sub-store metacubexd; do
+        if docker ps --format '{{.Names}}' | grep -q "$name"; then
+            echo -e "  ${GREEN}$name 运行中${NC}"
+        else
+            echo -e "  ${RED}$name 未启动${NC}"
+            docker logs "$name" 2>/dev/null | tail -5
+        fi
+    done
+
+    # 5. 等待 sing-box API 就绪
+    echo "[5] 等待 sing-box API 就绪..."
+    for i in $(seq 1 10); do
+        if curl -s --connect-timeout 2 "http://127.0.0.1:9090/configs" &>/dev/null; then
+            echo -e "  ${GREEN}API 就绪${NC}"
+            break
+        fi
+        sleep 2
+    done
+
+    # 6. 输出后续指引
+    echo ""
+    echo "========== 第一阶段部署完成 =========="
+    echo ""
+    echo "后续手动步骤:"
+    echo ""
+    echo "  1. 打开 http://192.168.100.135:9001 配置 sub-store"
+    echo "     - 添加你的机场订阅链接"
+    echo "     - 配置输出格式为 sing-box"
+    echo "     - 保存输出文件到 /etc/sub-store/nodes.json"
+    echo ""
+    echo "  2. 运行分组脚本生成 outbounds:"
+    echo "     sudo bash $GROUP_SCRIPT /etc/sub-store/nodes.json"
+    echo "     将输出的 outbounds 合并到 $TARGET_CONFIG"
+    echo ""
+    echo "  3. 重启容器: docker restart sing-box"
+    echo ""
+    echo "  4. 打开 Web UI: http://192.168.100.135:9091"
+    echo "     验证节点加载和切换"
+    echo ""
+    echo "  5. 验收检查:"
+    echo "     - 自动分组选择器默认显示: 全部聚合/自动组"
+    echo "     - 切一个自动组 → curl ipinfo.io 验证出口"
+    echo "     - 选手动组节点 → 路由标签自动更新"
+    echo "     - 自动组点节点 → 弹出不可选提示"
+    echo "     - 刷新页面后状态保持"
+}
+
+# ========================================
+# 第二阶段: TUN 模式
+# ========================================
+phase2() {
+    echo ""
+    echo "========== 第二阶段: TUN 模式 =========="
+    echo ""
+
+    # 1. 检查第一阶段就绪
+    if [ ! -f "$TARGET_CONFIG" ]; then
+        echo -e "${RED}未检测到 config.json，请先执行 --phase1${NC}"
+        exit 1
+    fi
+    if ! docker ps --format '{{.Names}}' | grep -q "sing-box"; then
+        echo -e "${RED}sing-box 容器未运行，请先执行 --phase1${NC}"
+        exit 1
+    fi
+
+    # 2. 自动快照备份
+    echo "[1] 自动快照备份..."
+    bash "$BASE_DIR/recovery.sh" --snapshot
+    if [ $? -ne 0 ]; then
+        echo -e "${RED}快照备份失败，终止部署${NC}"
+        exit 1
+    fi
+
+    # 3. 物理快照提示 — 停顿等待用户确认
+    echo ""
+    echo "================================================================"
+    echo "  请去 Ubuntu Server 管理面板（Proxmox/VMware/其他）"
+    echo "  创建虚拟机级别物理快照。"
+    echo ""
+    echo "  为什么要物理快照？"
+    echo "  recovery.sh 只能恢复软件层面（路由/nftables/DNS/配置），"
+    echo "  无法应对: 内核崩溃、磁盘损坏、Docker 版本升级不兼容、误删文件。"
+    echo "  物理快照是最后一道物理防线。"
+    echo ""
+    echo -n "  物理快照已完成？输入 yes 继续，输入 no 取消: "
+    read -r confirm
+    if [ "$confirm" != "yes" ]; then
+        echo -e "${YELLOW}已取消第二阶段部署${NC}"
+        exit 0
+    fi
+
+    # 4. 强制演练检查
+    echo ""
+    echo "[2] 检查演练是否通过..."
+    echo "  开 TUN 前必须通过: sudo bash recovery.sh --drill"
+    echo ""
+    echo -n "  演练已通过？输入 yes 继续，no 取消: "
+    read -r drill_ok
+    if [ "$drill_ok" != "yes" ]; then
+        echo -e "${YELLOW}请先完成演练: sudo bash recovery.sh --drill${NC}"
+        exit 0
+    fi
+
+    # 5. 合并 TUN 配置到现有 config.json
+    echo "[3] 合并 TUN 入站配置..."
+    jq -s '.[0].inbounds += .[1].inbounds_add | .[0]' \
+        "$TARGET_CONFIG" "$TUN_INBOUND" > /tmp/config-tmp.json
+    mv /tmp/config-tmp.json "$TARGET_CONFIG"
+    echo "  已合并 TUN 入站到 $TARGET_CONFIG"
+
+    # 6. 重启容器
+    echo "[4] 重启 sing-box 容器..."
+    docker restart sing-box
+    sleep 3
+
+    # 7. 验证 API
+    echo "[5] 验证 API..."
+    for i in $(seq 1 10); do
+        if curl -s --connect-timeout 2 "http://127.0.0.1:9090/configs" &>/dev/null; then
+            echo -e "  ${GREEN}sing-box API 就绪${NC}"
+            break
+        fi
+        sleep 2
+    done
+
+    # 8. TUN 网卡检查
+    echo ""
+    echo "  TUN 网卡:"
+    ip link show tun0 2>/dev/null && echo -e "  ${GREEN}tun0 已创建${NC}" || echo -e "  ${YELLOW}tun0 未检测到（可忽略）${NC}"
+
+    echo ""
+    echo "========== TUN 部署完成 =========="
+    echo ""
+    echo "  验证:"
+    echo "  1. SSH 是否保持连接（当前会话）"
+    echo "  2. curl ipinfo.io 显示代理出口 IP"
+    echo "  3. curl baidu.com 正常"
+    echo "  4. Web UI 可操作 http://192.168.100.135:9091"
+    echo ""
+    echo "  如果 SSH 断开:"
+    echo "  1. 通过 IPMI/控制台登录"
+    echo "  2. 执行: sudo bash recovery.sh --level1"
+    echo ""
+    echo "  全部恢复手段按序尝试:"
+    echo "    --level1 → --level2 → --level3 → --last-resort"
+}
+
+# ========================================
+check_deps
+load_env
+ensure_dirs
+
+case "${1:-}" in
+    --phase1) phase1 ;;
+    --phase2) phase2 ;;
+    *)
+        echo "用法: sudo bash $0 --phase1  |  --phase2"
+        echo "  --phase1  第一阶段: mixed 模式（不碰路由表）"
+        echo "  --phase2  第二阶段: TUN 模式（需先完成 phase1）"
+        ;;
+esac
