@@ -19,52 +19,62 @@
 
 ## 3. 非功能需求
 
-| ID | 需求 | 目标值 | 说明 |
-|----|------|--------|------|
-| N1 | Docker 隔离 | 必须 | 所有组件运行在 Docker 中，宿主机不安装 sing-box/mihomo 二进制 |
-| N2 | SSH 安全 | 100% | 部署前后 SSH 必须始终可连，不允许因代理故障丧失远程访问 |
-| N3 | 机场兼容 | ≥ 90% | 第一阶段结束时可用节点 / 总节点 ≥ 90%，否则触发 Mihomo 备选方案 |
-| N4 | 节点保留 | 必须 | urltest 标记不可用的节点不删除，保留在 outbounds 列表供手动重试 |
-| N5 | Web UI 可用 | 必须 | 局域网内任意设备可访问 http://192.168.100.135:9090/ui |
-| N6 | 恢复能力 | 三级+ | 具备网络/代理/系统三级恢复能力，失败时有最后手段（禁用容器+重启） |
-| N7 | 快照备份 | 必须 | TUN 部署前执行完整网络状态快照，支持从快照完全还原 |
+| ID | 需求 | 要求 |
+|----|------|------|
+| N1 | Docker 隔离 | 所有组件运行在 Docker 中，宿主机不安装 sing-box/mihomo 二进制 |
+| N2 | SSH 安全 | 正常部署流程下不应中断。第一阶段 mixed 模式期间 SSH 必须可用；第二阶段 TUN 前必须通过恢复演练；出现网络故障时必须存在恢复路径；RTO ≤ 5 分钟 |
+| N3 | 机场兼容 | 核心地区（香港/日本/新加坡/美国）每个至少一个稳定可用节点；可用节点比例 ≥ 60%；否则进入兼容性评估流程 |
+| N4 | 节点保留 | urltest 标记不可用的节点不删除，保留在 outbounds 列表供手动重试 |
+| N5 | Web UI 可用 | 局域网内任意设备可访问 Web UI |
+| N6 | 恢复能力 | 具备三级恢复能力，失败时有最后手段（禁用容器自启 + 重启） |
+| N7 | 快照备份 | TUN 部署前执行完整网络状态快照，支持从快照完全还原 |
 
 ## 4. 系统架构
 
 ```
-┌─────────────────────────────────────────────────────┐
-│                   Ubuntu Server 22.04               │
-│                   192.168.100.135                    │
-│                                                      │
-│  ┌────────────────── Docker ──────────────────────┐ │
-│  │                                                  │ │
-│  │  ┌──────────────┐       ┌──────────────────┐   │ │
-│  │  │   sing-box    │◄──────│   MetaCubeXD     │   │ │
-│  │  │   (核心引擎)   │ API   │   (Web UI)       │   │ │
-│  │  │               │──────►│                  │   │ │
-│  │  │  port:7890    │       │  port:9090/ui    │   │ │
-│  │  │  port:9090    │       └──────────────────┘   │ │
-│  │  └──────┬───────┘                               │ │
-│  │         │                                        │ │
-│  │         │ TUN / mixed                            │ │
-│  │         ▼                                        │ │
-│  │  ┌──────────────┐                                │ │
-│  │  │  宿主机网络栈  │                                │ │
-│  │  │  (nftables)   │                                │ │
-│  │  └──────────────┘                                │ │
-│  └──────────────────────────────────────────────────┘ │
-│                                                      │
-│  局域网 ←──── 192.168.100.135:9090                    │
-│           ←──── 192.168.100.135:7890 (mixed 模式)    │
-│                                                      │
-└─────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────┐
+│                   Ubuntu Server 22.04                   │
+│                   192.168.100.135                        │
+│                                                          │
+│  ┌────────────────── Docker ──────────────────────────┐ │
+│  │                                                      │ │
+│  │  ┌──────────────┐   ┌──────────────┐               │ │
+│  │  │   sing-box    │   │  sub-store   │               │ │
+│  │  │   (核心引擎)   │   │ (订阅管理)    │               │ │
+│  │  │               │   │ port:9000    │               │ │
+│  │  │  port:7890    │   └──────┬───────┘               │ │
+│  │  │  port:9090    │          │ 生成 sing-box 配置    │ │
+│  │  └──────┬───────┘          │                        │ │
+│  │         │                  ▼                        │ │
+│  │         │           ┌──────────┐                    │ │
+│  │         │           │ /etc/sing-box/outbounds.json  │ │
+│  │         │           └──────────┘                    │ │
+│  │         │                                           │ │
+ │  │                                                       │ │
+│  │            ┌──────────┐                                │ │
+│  │            │MetaCubeXD│                                │ │
+│  │            │(Web UI)  │                                │ │
+│  │            │port:9091 │                                │ │
+│  │            └──────────┘                                │ │
+│  │  ┌──────────▼──────┐                                   │ │
+│  │  │  宿主机网络栈     │                                   │ │
+│  │  │  (nftables)      │                                   │ │
+│  │  └─────────────────┘                                   │ │
+│  └────────────────────────────────────────────────────────┘ │
+│                                                              │
+│  局域网 ←──── 192.168.100.135:9091 (MetaCubeXD)              │
+│           ←──── 192.168.100.135:7890 (mixed 模式)            │
+│                                                          │
+└─────────────────────────────────────────────────────────┘
 ```
 
 ### 4.1 组件职责
 
 **sing-box**：流量路由核心。接收 TUN 入站（所有流量）或 mixed 入站（SOCKS5/HTTP），按规则集匹配出站协议，转发到目标服务器。
 
-**MetaCubeXD**：Web 控制面板。通过 sing-box Clash API（:9090）获取节点列表、切换节点、查看延迟。
+**MetaCubeXD**：Web 控制面板。通过 sing-box Clash API（:9090）获取节点列表、切换节点、查看延迟。独立容器运行。
+
+**sub-store**：订阅管理。Web GUI 管理多机场订阅、合并输出 sing-box 格式配置。独立容器运行。
 
 **Docker**：运行环境。`--network host` 共享宿主机网络栈 + `--cap-add NET_ADMIN` 操作路由/nftables。
 
@@ -92,7 +102,7 @@
 version: "3.8"
 services:
   sing-box:
-    image: ghcr.io/superng6/singbox:latest
+    image: ghcr.io/sagernet/sing-box:v1.11.0
     container_name: sing-box
     restart: unless-stopped
     network_mode: "host"
@@ -106,6 +116,7 @@ services:
       - TZ=Asia/Shanghai
 ```
 
+- 版本锁定：`v1.11.0`（或 Plan 阶段确认的最新稳定版），禁止使用 `latest`
 - `network_mode: host`：共享宿主机网络栈，sing-box 可直接操作路由和 nftables
 - `cap_add NET_ADMIN`：允许容器修改网络配置（路由表、nftables）
 - `/dev/net/tun`：TUN 虚拟网卡设备
@@ -182,7 +193,7 @@ services:
       "tag": "tun-in",
       "interface_name": "tun0",
       "address": "172.19.0.1/30",
-      "mtu": 9000,
+      "mtu": 1500,
       "auto_route": true,
       "auto_redirect": true,
       "strict_route": true,
@@ -198,17 +209,63 @@ services:
 
 **注意**：`strict_route: true` 时 sing-box 会删除默认路由并用自己的策略路由替代。这是 SSH 中断风险的主要来源。通过 route_exclude_address_set + SSH 端口规则保护 SSH。
 
-### 5.3 MetaCubeXD
+### 5.3 MetaCubeXD（独立容器）
 
-Web UI 组件，内嵌在 sing-box 容器的 `external_ui` 目录中。
+Web UI 组件，以独立容器运行。
 
-部署方式：
-- sing-box 容器启动时自动从 GitHub 下载到 `external_ui` 目录（首次启动时）
-- 或手动下载 MetaCubeXD 的 release 到 `/etc/sing-box/ui/` 目录
+```yaml
+  metacubexd:
+    image: ghcr.io/metacubex/metacubexd:latest
+    container_name: metacubexd
+    restart: unless-stopped
+    ports:
+      - "9091:80"
+```
 
-访问方式：
-- `http://192.168.100.135:9090/ui`
-- 局域网内任意设备浏览器访问
+- 独立容器：升级独立、调试独立、UI 损坏不影响核心代理
+- 不设 `network_mode: host`，通过 bridge 网络映射端口
+- 访问方式：`http://192.168.100.135:9091`
+- MetaCubeXD 前端连接 `http://192.168.100.135:9090`（sing-box API）
+- 不再使用 sing-box 的 `external_ui` 机制
+- **端口分配**：sing-box API → 9090，MetaCubeXD UI → 9091
+
+### 5.4 订阅管理
+
+**架构选型：sub-store**
+
+对比结论：
+
+| 方案 | 部署方式 | 优势 | 劣势 |
+|------|----------|------|------|
+| sub-store | Docker 独立容器 | 可视化管理、多订阅合并、支持输出 sing-box 格式 | 多一个组件需维护 |
+| subconverter | Docker 独立容器 | 成熟稳定、配置灵活 | 无 GUI、API 较原始 |
+| 机场自带转换 | 无部署 | 零维护 | 格式/协议受限、无法合并多订阅 |
+| sing-box provider | 内置 | 零额外组件 | provider 语法在不同版本间不稳定、调试困难 |
+
+**推荐方案：sub-store（Docker 独立容器）**
+
+原因：
+- 提供 Web GUI 管理订阅（添加/更新/删除）
+- 支持合并多个订阅到同一个输出
+- 直接输出 sing-box 格式，无需二次转换
+- 更新订阅后 sing-box 可通过 API 热重载
+
+**数据流**：
+
+```
+机场 A 订阅 ──┐
+机场 B 订阅 ──┼──► sub-store ──► sing-box 格式 JSON ──► sing-box
+机场 C 订阅 ──┘                    │
+                                   ▼
+                             挂载到 /etc/sing-box/
+                             作为 outbounds 源
+```
+
+**更新策略**：
+- sub-store 定时拉取机场原始订阅（可配置，建议每 6 小时）
+- sub-store 生成 sing-box 格式配置后写入持久化卷
+- sing-box 的 `outbounds` 通过 `!include` 引用 sub-store 生成的文件
+- 需要手动更新时：sub-store Web UI 点击更新 → sing-box API 重载
 
 ## 6. 部署策略（分阶段）
 
@@ -223,7 +280,7 @@ Web UI 组件，内嵌在 sing-box 容器的 `external_ui` 目录中。
 4. 验证功能
 
 **验证清单**：
-- [ ] Web UI 可访问（http://192.168.100.135:9090/ui）
+- [ ] Web UI 可访问（http://192.168.100.135:9091）
 - [ ] Clash API 正常（curl http://127.0.0.1:9090/configs）
 - [ ] 节点列表完整加载
 - [ ] 手动选择节点 → curl ipinfo.io 确认出口 IP 变化
@@ -235,9 +292,10 @@ Web UI 组件，内嵌在 sing-box 容器的 `external_ui` 目录中。
 
 **决策门**：
 ```
-可用节点数 / 总节点数 >= 90% ？
+核心地区（香港/日本/新加坡/美国）每个地区至少一个稳定节点？
+且 可用节点比例 >= 60% ？
   → 是：继续使用 sing-box，进入第二阶段
-  → 否：评估切换后端为 Mihomo（牺牲 anytls 换机场兼容性）
+  → 否：进入兼容性评估流程（评估切换后端为 Mihomo 或其他方案）
 ```
 
 ### 6.2 先决条件（第二阶段之前必须完成）
@@ -369,14 +427,15 @@ route.final = "select" (selector)
 
 ### 10.2 安全验收
 
-- [ ] SSH 始终可连（部署前后对比测试）
+- [ ] 第一阶段 mixed 模式部署期间 SSH 全程可用
 - [ ] `sudo bash recovery.sh --drill` → PASS
 - [ ] 容器异常停止后不影响 SSH
-- [ ] 配置错误时 recovery.sh 可在 30 秒内恢复网络
+- [ ] 配置错误时 recovery.sh 可在 5 分钟内恢复网络（RTO ≤ 5 min）
 
 ### 10.3 兼容性验收
 
-- [ ] 可用节点 / 总节点 ≥ 90%
+- [ ] 核心地区（香港/日本/新加坡/美国）每个至少一个稳定可用节点
+- [ ] 可用节点比例 ≥ 60%
 - [ ] 至少 3 种协议类型节点正常工作
 - [ ] 订阅更新后新节点自动生效
 
@@ -384,16 +443,16 @@ route.final = "select" (selector)
 
 | 文件 | 用途 |
 |------|------|
-| `docker-compose.yml` | Docker Compose 编排 |
+| `docker-compose.yml` | Docker Compose 编排（sing-box + MetaCubeXD + sub-store） |
 | `configs/sing-box/mixed.json` | 第一阶段 mixed 配置 |
 | `configs/sing-box/tun.json` | 第二阶段 TUN 增量配置 |
+| `configs/sub-store/sub-store.conf` | sub-store 配置文件 |
 | `scripts/backup-network-state.sh` | 网络状态快照备份 |
 | `recovery.sh` | 三级灾难恢复脚本 |
 | `scripts/deploy.sh` | 一键部署脚本 |
 
 ## 12. 开放问题
 
-- 订阅转换器：sub-store（Docker 部署） vs subconverter（Docker 部署） vs 机场自带转换
-  - 待定：在 Plan 中评估并决定
-- sing-box 版本锁定：latest 标签可能在版本更新后出现不兼容
-  - 待定：Plan 中决定是否锁定特定版本号
+- sing-box 具体版本号：Plan 阶段确认当前最新稳定版，锁定为具体版本（如 `v1.11.x`）
+- sub-store 与 sing-box 配置合并方式：`!include` vs 模板渲染，Plan 阶段决定
+- sub-store 持久化卷路径及权限设计
