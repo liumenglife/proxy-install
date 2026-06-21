@@ -112,7 +112,7 @@ sing-box 容器：
 - bind_interface 强制 sing-box 自身流量走物理网卡
 - 不依赖节点 IP 排除（机场 CDN 动态 IP 变化太快，维护成本高且不可靠）
 
-第二道：恢复脚本复原（三级恢复）
+第二道：恢复脚本复原（三级恢复 + 最后手段）
 recovery.sh 具备三级恢复能力，覆盖从 SSH 中断到系统完全回滚的所有场景：
 
 | 级别 | 目标 | 恢复内容 | 验收标准 |
@@ -120,9 +120,11 @@ recovery.sh 具备三级恢复能力，覆盖从 SSH 中断到系统完全回滚
 | 一级 | 恢复 SSH | 删 TUN / 删路由 / 清 nftables / 恢复网关 / 恢复 DNS | SSH 可连, curl 百度成功 |
 | 二级 | 回退 mixed | 一级 + 回滚 config.json + 重启容器 mixed 模式 | MetaCubeXD + API + 代理正常 |
 | 三级 | 系统还原 | 二级 + 导入备份快照 / 恢复 resolv.conf / nftables / 路由 / 清 Docker | 网络状态与部署前一致 |
+| 最后手段 | 重启恢复 | 禁用容器自启 → 停止容器 → 恢复路由 → 重启系统 | 重启后系统正常，sing-box 不自启 |
 - 部署前运行 scripts/backup-network-state.sh（保存网关/网卡/DNS/nftables/路由表/当前配置）
 - recovery.sh 放置于 /home/lm/soft-install/proxy-install/recovery.sh
 - 可通 IPMI/物理控制台执行 sudo bash recovery.sh 一键恢复
+- **最后手段用法**：`sudo bash recovery.sh --last-resort`，适用于三级恢复全部失败的情况
 
 第三道：开 TUN 前强制演练
 - 在第二阶段部署 TUN 之前，必须先做一次灾难演练
@@ -299,10 +301,17 @@ Mihomo 虽缺少 anytls 协议，但机场兼容性在某些场景下高于 sing
 
 目标：接管宿主机全部流量
 
-先决条件：
-- 第一阶段所有验证项通过
-- 已执行 backup-network-state.sh 备份网络状态
-- recovery.sh 已验证可执行
+先决条件（每项必须满足）：
+- [ ] 第一阶段所有验证项通过
+- [ ] 演练模式通过：sudo bash recovery.sh --drill → 输出 PASS
+- [ ] 执行快照备份：sudo bash recovery.sh --snapshot
+- [ ] recovery.sh 已验证可执行
+
+流程：
+1. 执行 sudo bash recovery.sh --snapshot（此刻起有一份完整快照）
+2. 应用 TUN 配置（覆盖 config.json）
+3. 重启 Docker 容器
+4. 验证 TUN 功能
 
 配置变化：
 - 在 inbounds 中新增 TUN 入站
@@ -318,7 +327,11 @@ Mihomo 虽缺少 anytls 协议，但机场兼容性在某些场景下高于 sing
 - 全部正常后再投入正式使用
 
 SSH 风险：已降低到最低，但理论上仍存在（机场换 IP、配置 typo）
-恢复手段：recovery.sh 一键恢复
+恢复手段（按顺序尝试）：
+1. recovery.sh --level1（网络恢复）
+2. recovery.sh --level2（回退 mixed 模式）
+3. recovery.sh --level3（从快照完全还原）
+4. recovery.sh --last-resort（禁用容器自启 + 重启——最后手段）
 
 ---
 

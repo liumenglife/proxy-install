@@ -453,20 +453,24 @@ main_menu() {
     echo "   宿主机 IP: $MY_IP"
     echo "================================================"
     echo ""
-    echo "  一级恢复 — 网络恢复（清理 TUN/路由/nftables, 恢复 SSH）"
-    echo "  二级恢复 — 代理恢复（回退到 mixed 模式, 保留代理功能）"
-    echo "  三级恢复 — 系统恢复（完全清理, 恢复到部署前状态）"
-    echo "  演练模式 — 模拟故障, 验证恢复脚本有效"
+    echo "  一级恢复   — 网络恢复（清理 TUN/路由/nftables, 恢复 SSH）"
+    echo "  二级恢复   — 代理恢复（回退到 mixed 模式, 保留代理功能）"
+    echo "  三级恢复   — 系统恢复（完全清理, 恢复到部署前状态）"
+    echo "  演练模式   — 模拟故障, 验证恢复脚本有效"
+    echo "  快照备份   — 执行部署前快照（开 TUN 前必须执行）"
+    echo "  最后手段   — 禁用容器自启 + 重启系统"
     echo "================================================"
     echo ""
-    echo "请选择恢复级别:"
+    echo "请选择操作:"
     echo "  1) 一级恢复（网络恢复）"
     echo "  2) 二级恢复（回退到 mixed 模式）"
     echo "  3) 三级恢复（恢复到部署前）"
     echo "  4) 演练模式（验证恢复能力）"
-    echo "  5) 退出"
+    echo "  5) 快照备份（开 TUN 前执行）"
+    echo "  6) 最后手段（禁用容器 + 重启）"
+    echo "  7) 退出"
     echo ""
-    echo -n "请输入 [1-5]: "
+    echo -n "请输入 [1-7]: "
     read -r choice
     echo ""
 
@@ -475,18 +479,92 @@ main_menu() {
         2) level2_proxy_recovery ;;
         3) level3_system_restore ;;
         4) drill_mode ;;
-        5) echo "已取消" ;;
+        5) snapshot_backup ;;
+        6) last_resort ;;
+        7) echo "已取消" ;;
         *) echo "无效选择" ;;
     esac
+}
+
+# ========================================
+# 最后手段：禁用容器自启 → 重启
+# ========================================
+last_resort() {
+    echo ""
+    echo "========== 最后手段：禁用容器自启 + 重启 =========="
+    echo "说明：当三级恢复都失败时，禁用 sing-box 自启后重启系统"
+    echo "重启后 Docker 不会自动启动 sing-box，系统应能正常联网"
+    echo ""
+
+    # 禁用容器自启
+    echo "[1] 禁用 sing-box 容器自启"
+    docker update --restart no sing-box 2>/dev/null && \
+        echo "  容器自启已禁用: docker update --restart no sing-box" || \
+        echo "  容器不存在或 Docker 不可用"
+
+    # 停止容器
+    echo "[2] 停止 sing-box 容器"
+    docker stop sing-box 2>/dev/null && echo "  容器已停止" || echo "  无运行中的容器"
+
+    # 清理 TUN 和路由
+    echo "[3] 清理 sing-box 残留"
+    for iface in $(ip link show | grep -oP 'tun\d+|sing-box'); do
+        ip link del "$iface" 2>/dev/null && echo "  已删除: $iface" || true
+    done
+    ip route del default 2>/dev/null || true
+    local IFACE
+    IFACE=$(find_interface)
+    local GATEWAY
+    GATEWAY=$(find_gateway)
+    if [ -n "$IFACE" ] && [ -n "$GATEWAY" ]; then
+        ip route add default via "$GATEWAY" dev "$IFACE" 2>/dev/null || \
+            ip route replace default via "$GATEWAY" dev "$IFACE" 2>/dev/null
+        echo "  已恢复默认路由"
+    fi
+
+    echo ""
+    echo "[4] 即将重启系统"
+    echo "  重启后网络应自动恢复（sing-box 不会自启）"
+    echo "  如果重启后仍有问题，执行: sudo bash recovery.sh --level1"
+    echo ""
+    echo -n "确认重启系统？(y/N): "
+    read -r confirm
+    if [ "$confirm" = "y" ] || [ "$confirm" = "Y" ]; then
+        echo "  正在重启..."
+        reboot
+    else
+        echo "  已取消重启"
+        echo "  手动处理:"
+        echo "  1. docker update --restart no sing-box"
+        echo "  2. docker stop sing-box"
+        echo "  3. sudo reboot"
+    fi
+}
+
+# ========================================
+# 快照备份（执行 TUN 部署前强制调用）
+# ========================================
+snapshot_backup() {
+    if [ -f "$BASE_DIR/scripts/backup-network-state.sh" ]; then
+        bash "$BASE_DIR/scripts/backup-network-state.sh"
+        echo ""
+        echo "  快照备份完成"
+        echo "  恢复时使用: sudo bash recovery.sh --level3"
+    else
+        echo "错误：找不到 backup-network-state.sh"
+        return 1
+    fi
 }
 
 # ========================================
 # 入口
 # ========================================
 case "${1:-}" in
-    --level1) level1_network_recovery ;;
-    --level2) level2_proxy_recovery ;;
-    --level3) level3_system_restore ;;
-    --drill)  drill_mode ;;
-    *)        main_menu ;;
+    --level1)    level1_network_recovery ;;
+    --level2)    level2_proxy_recovery ;;
+    --level3)    level3_system_restore ;;
+    --drill)     drill_mode ;;
+    --snapshot)  snapshot_backup ;;
+    --last-resort) last_resort ;;
+    *)           main_menu ;;
 esac
