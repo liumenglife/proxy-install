@@ -120,9 +120,17 @@ MetaCubeXD 不使用 9090，因为 9090 已由 sing-box 的 Clash API 占用。M
 ### MetaCubeXD
 
 - 后端地址：`http://192.168.100.135:9090`
-- 密码/Secret：留空
+- 密钥/Secret：留空（不要输入 `secret` 字样）
 
 当前 sing-box Clash API 未配置 `secret`，所以 MetaCubeXD 连接时不需要密码。
+
+首次打开 `http://192.168.100.135:9091` 时按下面填写：
+
+1. 后端地址填：`http://192.168.100.135:9090`
+2. 密钥输入框保持空白
+3. 点击添加/连接
+
+不要填 `http://127.0.0.1:9090`。在浏览器里，`127.0.0.1` 指的是你当前电脑，不是 Ubuntu 服务器。
 
 ### sub-store
 
@@ -133,3 +141,15 @@ MetaCubeXD 不使用 9090，因为 9090 已由 sing-box 的 Clash API 占用。M
 compose 会基于 `xream/sub-store:2.31.0-http-meta` 构建本地补丁镜像 `proxy-install/sub-store:2.31.0-http-meta`，把 Sub-Store 前端默认后端从官方 `https://sub.store` 改为本机 `http://192.168.100.135:9002`。
 
 正常情况下直接打开 `/subs` 不需要手动填写后端地址；如果浏览器仍显示旧错误，先强制刷新或清理该站点缓存。
+
+## 当前订阅状态与下一步
+
+你已经在 sub-store 配置了 4 个机场，下一步是导出节点并生成 sing-box 分组：
+
+1. 在 sub-store 中确认 4 个“单条订阅”都能刷新成功。
+2. 创建一个“组合订阅”，把 4 个机场都加入进去。
+3. 从组合订阅导出 sing-box 格式节点 JSON。
+4. 运行 `scripts/group-nodes.sh` 生成三层分组 outbounds。
+5. 合并 outbounds 到 `/etc/sing-box/config.json` 并重启 `sing-box`。
+
+如果某个机场显示 `NetworkError`，说明该机场订阅链接当前从服务器侧无法访问；先不要把它作为验收通过节点来源。
