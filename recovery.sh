@@ -86,6 +86,7 @@ ip -6 route del default 2>/dev/null || true
 
 # 找物理网卡（有 IP 的第一个非 lo 接口）
 IFACE=""
+MY_IP="192.168.100.135"
 for i in $(ls /sys/class/net/ 2>/dev/null); do
     [ "$i" = "lo" ] && continue
     [[ "$i" == tun* ]] && continue
@@ -96,18 +97,37 @@ for i in $(ls /sys/class/net/ 2>/dev/null); do
 done
 
 if [ -n "$IFACE" ]; then
-    echo "  检测到物理网卡: $IFACE"
-    # 尝试 dhcp 续约
-    if command -v dhclient &>/dev/null; then
-        dhclient -v "$IFACE" 2>/dev/null && echo "  DHCP 续约成功" || echo "  DHCP 续约失败（静态 IP 忽略）"
+    echo "  检测到物理网卡: $IFACE / IP: $MY_IP"
+    # 尝试从备份文件读取网关
+    GATEWAY=""
+    for bf in /etc/sing-box/network-state-backup.txt /home/lm/soft-install/proxy-install/network-state-backup.txt; do
+        if [ -f "$bf" ]; then
+            GATEWAY=$(grep "^DEFAULT_GW=" "$bf" | head -1 | cut -d= -f2)
+            [ -n "$GATEWAY" ] && echo "  从备份读取到网关: $GATEWAY" && break
+        fi
+    done
+    # 无备份时常用网关列表
+    if [ -z "$GATEWAY" ]; then
+        for gw in 192.168.100.1 192.168.1.1 192.168.0.1; do
+            if ip route get "$gw" &>/dev/null 2>&1; then
+                GATEWAY="$gw"
+                echo "  自动探测到网关: $GATEWAY"
+                break
+            fi
+        done
     fi
-    # 检查默认路由是否已恢复
-    if ! ip route show default | grep -q "$IFACE"; then
-        echo "  警告：默认路由尚未恢复，需要手动添加"
-        echo "  示例: ip route add default via <网关IP> dev $IFACE"
+    # 添加默认路由
+    if [ -n "$GATEWAY" ]; then
+        ip route add default via "$GATEWAY" dev "$IFACE" 2>/dev/null && \
+            echo "  默认路由已添加: via $GATEWAY dev $IFACE" || \
+            ip route replace default via "$GATEWAY" dev "$IFACE" 2>/dev/null && \
+            echo "  默认路由已替换: via $GATEWAY dev $IFACE"
     else
-        echo "  默认路由已恢复"
+        echo "  无法自动获取网关，请手动执行:"
+        echo "  ip route add default via <网关IP> dev $IFACE"
+        echo "  (你的是静态IP 192.168.100.135，网关通常是 192.168.100.1)"
     fi
+    echo "  IP $MY_IP 保持不变（静态IP不需要DHCP）"
 else
     echo "  错误：无法检测到物理网卡"
     ip link show
