@@ -1,0 +1,35 @@
+services:
+  sing-box:
+    image: ${SING_BOX_IMAGE}
+    container_name: sing-box
+    restart: unless-stopped
+    network_mode: "host"
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun
+    volumes:
+      - ${SING_BOX_CONFIG_DIR}:/etc/sing-box
+      - ${SUB_STORE_DATA_DIR}:/etc/sub-store:ro
+    environment:
+      - TZ=Asia/Shanghai
+
+  sub-store:
+    image: ${SUB_STORE_IMAGE}
+    container_name: sub-store
+    restart: unless-stopped
+    ports:
+      - "9001:9001"
+    volumes:
+      - ${SUB_STORE_DATA_DIR}:/opt/sub-store
+    environment:
+      - TZ=Asia/Shanghai
+
+  metacubexd:
+    image: ${METACUBEXD_IMAGE}
+    container_name: metacubexd
+    restart: unless-stopped
+    ports:
+      - "9091:80"
+    environment:
+      - TZ=Asia/Shanghai
