@@ -15,6 +15,7 @@ COMPOSE_FILE="$BASE_DIR/docker-compose.yml"
 MIXED_CONFIG="$BASE_DIR/configs/sing-box/mixed.json"
 TUN_INBOUND="$BASE_DIR/configs/sing-box/tun-inbound.json"
 GROUP_SCRIPT="$BASE_DIR/scripts/group-nodes.sh"
+DOCKER_DAEMON_JSON="${DOCKER_DAEMON_JSON:-/etc/docker/daemon.json}"
 # SING_BOX_CONFIG_DIR / SUB_STORE_DATA_DIR 在 load_env 后设 fallback
 
 RED='\033[0;31m'
@@ -22,7 +23,7 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m'
 
-if [ "$(id -u)" -ne 0 ]; then
+if [ "${DEPLOY_LIB_ONLY:-0}" != "1" ] && [ "$(id -u)" -ne 0 ]; then
     echo "必须用 root 或 sudo 执行"
     exit 1
 fi
@@ -59,10 +60,57 @@ ensure_dirs() {
 # ========================================
 # 第一阶段: mixed 模式
 # ========================================
-pull_images() {
-    echo "[1] 拉取 Docker 镜像..."
-    cd "$BASE_DIR"
+remove_daocloud_mirror() {
+    local daemon_json="$1"
+    local tmp_file
+
+    tmp_file="$(mktemp)"
+    if ! jq '."registry-mirrors" = ((."registry-mirrors" // []) | map(select(contains("docker.m.daocloud.io") | not)))' \
+        "$daemon_json" > "$tmp_file"; then
+        rm -f "$tmp_file"
+        return 1
+    fi
+    mv "$tmp_file" "$daemon_json"
+}
+
+daemon_has_daocloud_mirror() {
+    local daemon_json="$1"
+
+    [ -f "$daemon_json" ] || return 1
+    jq -e '((."registry-mirrors" // []) | any(contains("docker.m.daocloud.io")))' \
+        "$daemon_json" >/dev/null 2>&1
+}
+
+repair_daocloud_mirror() {
+    local daemon_json="$1"
+    local backup_file
+
+    backup_file="${daemon_json}.bak.$(date +%Y%m%d%H%M%S)"
+    echo ""
+    echo -e "${YELLOW}检测到 Docker daemon 配置包含失效 mirror: https://docker.m.daocloud.io${NC}"
+    echo "脚本将自动备份 $daemon_json 到 $backup_file，移除该 mirror，并重启 Docker 后重试拉取镜像。"
+
+    cp -a "$daemon_json" "$backup_file"
+    if ! remove_daocloud_mirror "$daemon_json"; then
+        echo -e "${RED}修改 Docker daemon 配置失败，已保留备份: $backup_file${NC}"
+        return 1
+    fi
+
+    echo "正在重启 Docker..."
+    if command -v systemctl >/dev/null 2>&1; then
+        systemctl restart docker
+    else
+        service docker restart
+    fi
+}
+
+pull_images_attempt() {
     local failed=""
+
+    if ! cd "$BASE_DIR"; then
+        echo -e "${RED}无法进入目录: $BASE_DIR${NC}"
+        exit 1
+    fi
     for img in "${SING_BOX_IMAGE}" "${SUB_STORE_IMAGE}" "${METACUBEXD_IMAGE}"; do
         echo "  拉取 $img ..."
         if docker pull "$img" 2>&1; then
@@ -72,16 +120,42 @@ pull_images() {
             failed="$failed $img"
         fi
     done
-    if [ -n "$failed" ]; then
+    PULL_IMAGES_FAILED="$failed"
+}
+
+print_pull_images_failed() {
+    local failed="$1"
+
+    echo ""
+    echo -e "${RED}以下镜像拉取失败:${NC}"
+    for f in $failed; do echo "  - $f"; done
+}
+
+pull_images() {
+    local repaired_daocloud=0
+
+    echo "[1] 拉取 Docker 镜像..."
+    pull_images_attempt
+
+    if [ -n "$PULL_IMAGES_FAILED" ] && daemon_has_daocloud_mirror "$DOCKER_DAEMON_JSON"; then
+        if ! repair_daocloud_mirror "$DOCKER_DAEMON_JSON"; then
+            echo -e "${RED}自动修复 Docker mirror 失败，终止部署${NC}"
+            exit 1
+        fi
+        repaired_daocloud=1
+        echo "重新拉取 Docker 镜像..."
+        pull_images_attempt
+    fi
+
+    if [ -n "$PULL_IMAGES_FAILED" ]; then
+        print_pull_images_failed "$PULL_IMAGES_FAILED"
         echo ""
-        echo -e "${RED}以下镜像拉取失败:${NC}"
-        for f in $failed; do echo "  - $f"; done
-        echo ""
-        echo "  常见原因: registry mirror 失效（daocloud 403 等）"
-        echo "  修复方法:"
-        echo "    sudo sed -i '/daocloud/d' /etc/docker/daemon.json"
-        echo "    sudo systemctl restart docker"
-        echo "  然后重新执行部署。"
+        if [ "$repaired_daocloud" -eq 1 ]; then
+            echo "已完成自动 mirror 修复尝试；镜像仍拉取失败，终止部署。"
+        else
+            echo "未检测到可自动移除的 daocloud mirror；镜像拉取失败，终止部署。"
+        fi
+        echo "请检查 Docker Hub 网络连通性、镜像名称或其他 registry mirror 配置。"
         exit 1
     fi
 }
@@ -109,7 +183,10 @@ phase1() {
 
     # 4. 启动容器
     echo "[4] 启动容器..."
-    cd "$BASE_DIR" && docker compose up -d
+    if ! cd "$BASE_DIR" || ! docker compose up -d; then
+        echo -e "${RED}容器启动失败，终止部署${NC}"
+        exit 1
+    fi
 
     # 5. 等待容器就绪
     echo "[5] 等待容器就绪..."
@@ -282,17 +359,19 @@ phase2() {
 }
 
 # ========================================
-check_deps
-load_env
-env_init
-ensure_dirs
+if [ "${DEPLOY_LIB_ONLY:-0}" != "1" ]; then
+    check_deps
+    load_env
+    env_init
+    ensure_dirs
 
-case "${1:-}" in
-    --phase1) phase1 ;;
-    --phase2) phase2 ;;
-    *)
-        echo "用法: sudo bash $0 --phase1  |  --phase2"
-        echo "  --phase1  第一阶段: mixed 模式（不碰路由表）"
-        echo "  --phase2  第二阶段: TUN 模式（需先完成 phase1）"
-        ;;
-esac
+    case "${1:-}" in
+        --phase1) phase1 ;;
+        --phase2) phase2 ;;
+        *)
+            echo "用法: sudo bash $0 --phase1  |  --phase2"
+            echo "  --phase1  第一阶段: mixed 模式（不碰路由表）"
+            echo "  --phase2  第二阶段: TUN 模式（需先完成 phase1）"
+            ;;
+    esac
+fi
