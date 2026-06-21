@@ -59,30 +59,60 @@ ensure_dirs() {
 # ========================================
 # 第一阶段: mixed 模式
 # ========================================
+pull_images() {
+    echo "[1] 拉取 Docker 镜像..."
+    cd "$BASE_DIR"
+    local failed=""
+    for img in "${SING_BOX_IMAGE}" "${SUB_STORE_IMAGE}" "${METACUBEXD_IMAGE}"; do
+        echo "  拉取 $img ..."
+        if docker pull "$img" 2>&1; then
+            echo -e "    ${GREEN}完成${NC}"
+        else
+            echo -e "    ${RED}失败${NC}"
+            failed="$failed $img"
+        fi
+    done
+    if [ -n "$failed" ]; then
+        echo ""
+        echo -e "${RED}以下镜像拉取失败:${NC}"
+        for f in $failed; do echo "  - $f"; done
+        echo ""
+        echo "  常见原因: registry mirror 失效（daocloud 403 等）"
+        echo "  修复方法:"
+        echo "    sudo sed -i '/daocloud/d' /etc/docker/daemon.json"
+        echo "    sudo systemctl restart docker"
+        echo "  然后重新执行部署。"
+        exit 1
+    fi
+}
+
 phase1() {
     echo ""
     echo "========== 第一阶段: mixed 模式 =========="
     echo ""
 
-    # 1. 备份网络状态
-    echo "[1] 备份当前网络状态..."
+    # 1. 拉取镜像
+    pull_images
+
+    # 2. 备份网络状态
+    echo "[2] 备份当前网络状态..."
     bash "$BASE_DIR/scripts/backup-network-state.sh"
     if [ $? -ne 0 ]; then
         echo -e "${RED}网络备份失败，终止部署${NC}"
         exit 1
     fi
 
-    # 2. 复制 mixed 配置到目标位置
-    echo "[2] 复制 mixed 配置到 $TARGET_CONFIG"
+    # 3. 复制 mixed 配置到目标位置
+    echo "[3] 复制 mixed 配置到 $TARGET_CONFIG"
     cp "$MIXED_CONFIG" "$TARGET_CONFIG"
     chmod 644 "$TARGET_CONFIG"
 
-    # 3. 启动 Docker Compose
-    echo "[3] 启动 Docker Compose..."
+    # 4. 启动容器
+    echo "[4] 启动容器..."
     cd "$BASE_DIR" && docker compose up -d
 
-    # 4. 等待容器就绪
-    echo "[4] 等待容器就绪..."
+    # 5. 等待容器就绪
+    echo "[5] 等待容器就绪..."
     for name in sing-box sub-store metacubexd; do
         for i in $(seq 1 10); do
             if docker ps --format '{{.Names}}' | grep -q "$name"; then
@@ -97,8 +127,8 @@ phase1() {
         fi
     done
 
-    # 5. 等待 sing-box API 就绪
-    echo "[5] 等待 sing-box API 就绪..."
+    # 6. 等待 sing-box API 就绪
+    echo "[6] 等待 sing-box API 就绪..."
     for i in $(seq 1 10); do
         if curl -s --connect-timeout 2 "http://127.0.0.1:9090/configs" &>/dev/null; then
             echo -e "  ${GREEN}API 就绪${NC}"
@@ -107,7 +137,7 @@ phase1() {
         sleep 2
     done
 
-    # 6. 输出后续指引
+    # 7. 输出后续指引
     echo ""
     echo "========== 第一阶段部署完成 =========="
     echo ""
