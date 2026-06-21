@@ -7,19 +7,14 @@
     "servers": [
       {
         "tag": "dns-remote",
-        "address": "https://1.1.1.1/dns-query",
-        "detour": "proxy"
+        "type": "https",
+        "server": "1.1.1.1",
+        "path": "/dns-query"
       },
       {
         "tag": "dns-local",
-        "address": "223.5.5.5",
-        "detour": "direct"
-      }
-    ],
-    "rules": [
-      {
-        "outbound": "any",
-        "server": "dns-local"
+        "type": "udp",
+        "server": "223.5.5.5"
       }
     ],
     "final": "dns-remote",
@@ -38,15 +33,14 @@
   "outbounds": [
     { "type": "direct", "tag": "direct" },
     { "type": "block", "tag": "block" },
-    { "type": "dns", "tag": "dns-out" },
-    { "type": "urltest", "tag": "全部聚合/自动组", "outbounds": [], "interval": "20s" },
-    { "type": "selector", "tag": "全部聚合/手动组", "outbounds": [] }
+    { "type": "urltest", "tag": "全部聚合/自动组", "outbounds": ["direct"], "interval": "20s" },
+    { "type": "selector", "tag": "全部聚合/手动组", "outbounds": ["direct"] }
   ],
   "route": {
     "rules": [
       {
         "protocol": "dns",
-        "outbound": "dns-out"
+        "action": "hijack-dns"
       },
       {
         "rule_set": "geosite-cn",
@@ -65,6 +59,7 @@
         "download_detour": "direct"
       }
     ],
+    "default_domain_resolver": "dns-local",
     "final": "全部聚合/自动组",
     "auto_detect_interface": true
   },
