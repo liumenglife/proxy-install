@@ -16,6 +16,12 @@ services:
       - TZ=Asia/Shanghai
 
   sub-store:
+    build:
+      context: .
+      dockerfile: Dockerfile.sub-store
+      args:
+        BASE_IMAGE: ${SUB_STORE_BASE_IMAGE}
+        SUB_STORE_PUBLIC_API: http://${MY_IP}:9002
     image: ${SUB_STORE_IMAGE}
     container_name: sub-store
     restart: unless-stopped

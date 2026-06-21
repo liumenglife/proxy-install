@@ -1,0 +1,7 @@
+ARG BASE_IMAGE=xream/sub-store:2.31.0-http-meta
+FROM ${BASE_IMAGE}
+
+ARG SUB_STORE_PUBLIC_API=http://192.168.100.135:9002
+
+RUN find /opt/app/frontend -type f \( -name '*.js' -o -name '*.html' \) -print0 \
+    | xargs -0 sed -i "s#https://sub.store#${SUB_STORE_PUBLIC_API}#g"

@@ -111,9 +111,11 @@ pull_images_attempt() {
         echo -e "${RED}无法进入目录: $BASE_DIR${NC}"
         exit 1
     fi
-    for img in "${SING_BOX_IMAGE}" "${SUB_STORE_IMAGE}" "${METACUBEXD_IMAGE}"; do
+    for img in "${SING_BOX_IMAGE}" "${SUB_STORE_BASE_IMAGE:-$SUB_STORE_IMAGE}" "${METACUBEXD_IMAGE}"; do
         echo "  拉取 $img ..."
-        if docker pull "$img" 2>&1; then
+        if docker image inspect "$img" >/dev/null 2>&1; then
+            echo -e "    ${GREEN}本地已存在${NC}"
+        elif docker pull "$img" 2>&1; then
             echo -e "    ${GREEN}完成${NC}"
         else
             echo -e "    ${RED}失败${NC}"
@@ -156,6 +158,12 @@ pull_images() {
             echo "未检测到可自动移除的 daocloud mirror；镜像拉取失败，终止部署。"
         fi
         echo "请检查 Docker Hub 网络连通性、镜像名称或其他 registry mirror 配置。"
+        exit 1
+    fi
+
+    echo "  构建本地 sub-store 前端补丁镜像..."
+    if ! cd "$BASE_DIR" || ! docker compose build sub-store; then
+        echo -e "${RED}sub-store 本地镜像构建失败，终止部署${NC}"
         exit 1
     fi
 }

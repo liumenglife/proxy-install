@@ -45,7 +45,8 @@ assert_port_pair() {
     fi
 }
 
-assert_contains "$BASE_DIR/.env" "SUB_STORE_IMAGE=xream/sub-store:2.31.0-http-meta"
+assert_contains "$BASE_DIR/.env" "SUB_STORE_IMAGE=proxy-install/sub-store:2.31.0-http-meta"
+assert_contains "$BASE_DIR/.env" "SUB_STORE_BASE_IMAGE=xream/sub-store:2.31.0-http-meta"
 
 extract_service "sing-box" > "$SERVICE_FILE"
 assert_contains "$SERVICE_FILE" "    image: ghcr.io/sagernet/sing-box:v1.13.13"
@@ -60,7 +61,10 @@ assert_contains "$SERVICE_FILE" "        target: /etc/sing-box"
 assert_contains "$SERVICE_FILE" "        target: /etc/sub-store"
 
 extract_service "sub-store" > "$SERVICE_FILE"
-assert_contains "$SERVICE_FILE" "    image: xream/sub-store:2.31.0-http-meta"
+assert_contains "$SERVICE_FILE" "    dockerfile: Dockerfile.sub-store"
+assert_contains "$SERVICE_FILE" "        BASE_IMAGE: xream/sub-store:2.31.0-http-meta"
+assert_contains "$SERVICE_FILE" "        SUB_STORE_PUBLIC_API: http://192.168.100.135:9002"
+assert_contains "$SERVICE_FILE" "    image: proxy-install/sub-store:2.31.0-http-meta"
 assert_port_pair "sub-store" "9001" "3001"
 assert_port_pair "sub-store" "9002" "3000"
 assert_contains "$SERVICE_FILE" "      SUB_STORE_DATA_BASE_PATH: /opt/app/data"

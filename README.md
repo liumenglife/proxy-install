@@ -127,6 +127,9 @@ MetaCubeXD 不使用 9090，因为 9090 已由 sing-box 的 Clash API 占用。M
 ### sub-store
 
 - 前端地址：`http://192.168.100.135:9001`
+- 订阅管理页面：`http://192.168.100.135:9001/subs`
 - 后端地址：`http://192.168.100.135:9002`
 
-compose 已设置 `SUB_STORE_FRONTEND_BACKEND_PATH=/`，9001 前端会同源代理到后端接口。正常情况下不需要手动填写后端地址。
+compose 会基于 `xream/sub-store:2.31.0-http-meta` 构建本地补丁镜像 `proxy-install/sub-store:2.31.0-http-meta`，把 Sub-Store 前端默认后端从官方 `https://sub.store` 改为本机 `http://192.168.100.135:9002`。
+
+正常情况下直接打开 `/subs` 不需要手动填写后端地址；如果浏览器仍显示旧错误，先强制刷新或清理该站点缓存。
