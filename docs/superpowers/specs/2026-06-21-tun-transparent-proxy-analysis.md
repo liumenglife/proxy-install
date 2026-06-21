@@ -29,7 +29,7 @@
 - Mihomo：MetaCubeX 维护官方 Docker 镜像
 
 **结论：sing-box 胜出。** 只有它同时满足：
-1. 协议全覆盖
+1. 协议全覆盖（但注意：协议覆盖 ≠ 机场兼容。机场实现差异、配置参数、订阅转换问题都可能影响实际可用性）
 2. 原生 TUN 模式
 3. auto_redirect 解决 Docker bridge 冲突
 4. 2026 年仍在高速迭代
@@ -65,6 +65,22 @@
 
 ## 3. Docker TUN 部署方案
 
+### 核心警示：Docker 不是隔离，是在容器中操作宿主机网络栈
+
+```
+容器参数:
+  network_mode: host     → 共享宿主机网络命名空间
+  cap_add: NET_ADMIN     → 允许修改路由表
+  devices: /dev/net/tun  → 允许创建 TUN 虚拟网卡
+```
+
+这三个参数加起来的效果：**sing-box 虽然在 Docker 容器里运行，但它有权限操作宿主机的路由表、nftables 规则和网络接口。**
+
+与直接在本机安装的区别：
+- 优点：容器化便于管理（启动/停止/更新），不污染宿主机文件系统
+- 缺点：一旦 auto_route 改了路由表，效果和直接安装一样——SSH 照样会断
+- 所以：**不要认为"Docker = 安全"，安全来自于配置正确，而非部署形式**
+
 ### 架构总览
 
 宿主机（Ubuntu 22.04）运行两个容器：
@@ -80,24 +96,38 @@ sing-box 容器：
 - 必须 auto_redirect: true（防 Docker bridge 冲突 + 防流量回环）
 - 必须 route.auto_detect_interface: true（自动识别物理网卡）
 
-### 安全配置详解
+### SSH 保护措施与局限性
 
-**为什么之前会弄坏 SSH？**
-- 你之前的方案：直接在本机安装 sing-box，auto_route 修改了默认路由
-- 默认路由指向 TUN → 所有出站流量进 TUN → SSH 响应包出不去 → 连接断开
-- 且没有排除规则保护 SSH 端口和代理节点 IP
+**为什么不能100%保证 SSH 不被吃？**
 
-**正确防护措施（缺一不可）：**
-- 措施一：auto_redirect: true —— 使用 nftables 做流量标记而非直接改默认路由
-- 措施二：auto_detect_interface: true —— 自动识别物理出口网卡
-- 措施三：route_exclude_address_set —— 将宿主机 SSH 端口、代理节点 IP、局域网网段排除在 TUN 之外
-- 措施四：路由规则中 SSH 流量走 direct —— rule_set 匹配 SSH 端口时直接放行
-- 措施五：bind_interface —— 强制 sing-box 自身连接走物理网卡而非 TUN
+理由一：机场节点 IP 会变（排除规则绑的是 IP，机场换 IP 后规则失效）
+理由二：CDN 回源 IP 变化（Cloudflare 等 CDN 的 IP 会动态调整）
+理由三：配置写错（字段 typo，route_exclude_address_set 拼错，SSH 直接断）
 
-**兜底方案：**
-- 配置 crontab 每 5 分钟检测 sing-box 是否异常，异常则重启并恢复直连
-- 如果宿主机有 IPMI/BMC/iDRAC，作为备用管理通道
-- 首次部署先用 mixed 端口模式验证配置，再切换 TUN 模式
+**四道防护（按强度排序）：**
+
+第一道：正确配置排除规则
+- route_exclude_address_set 排除局域网网段（192.168.0.0/16）
+- 路由规则 SSH 端口（22）直连 direct 出站
+- bind_interface 强制 sing-box 自身流量走物理网卡
+
+第二道：动态排除方案（解决机场换 IP 问题）
+- 用 rule_set 从远程规则集中动态获取节点 IP 段
+- 或直接用 process_name 匹配 sshd 进程直连（进程名规则不受 IP 变化影响）
+
+第三道：恢复脚本复原
+- 部署前运行 scripts/backup-network-state.sh 保存网络状态快照
+- 灾难时通过 IPMI/控制台执行 recovery.sh 恢复（已经写好）
+
+第四道：分阶段上线（最重要的一道）
+- 第一阶段不开 TUN，只用 mixed 端口模式——完全不碰路由表
+- 确认所有功能正常后，第二阶段再加 TUN
+- 详见下文"强制分阶段上线策略"
+
+### 兜底方案
+- 部署前必须执行 backup-network-state.sh（保存网关/网卡信息）
+- recovery.sh 放置在 /home/lm/soft-install/proxy-install/recovery.sh
+- 可通 IPMI/物理控制台执行 sudo bash recovery.sh 一键恢复
 
 ---
 
@@ -145,6 +175,17 @@ route 部分：
 
 ## 5. 协议支持详细清单
 
+### 重要提示：协议支持 ≠ 机场兼容
+
+sing-box 协议全不代表所有机场都能用。机场实现差异：
+- 同样的 VLESS + WS + TLS，机场 A 能用、机场 B 不能
+- 订阅链接返回的节点参数（path、host、encryption 等）各机场不同
+- 订阅转换环节（机场订阅 → sing-box 配置）可能引入问题
+
+所以协议支持清单只说明"sing-box 能理解这个协议"，不保证"所有此协议的机场都能用"。
+
+### 支持细节
+
 sing-box 对八种协议的支持，按版本分类：
 
 **v1.0 起就支持（稳定成熟）：**
@@ -170,28 +211,101 @@ sing-box 的模块化架构是 adapter 模式，添加新协议只需新增 adap
 
 ---
 
-## 6. 最终推荐方案
+## 6. 强制分阶段上线策略（最高优先级的防灾措施）
+
+这是整个方案中最重要的部分，绝不可以跳过。
+
+### 第一阶段：mixed 端口模式（第 1-3 天）
+
+目标：完全不动路由表，验证所有核心功能
+
+配置：
+- 只开 mixed 入站（SOCKS5 + HTTP 代理，7890 端口）
+- 不开 TUN，不开 auto_route
+- Clash API + MetaCubeXD 正常开启
+
+验证清单（每项都必须确认通过才能进入第二阶段）：
+- 多机场订阅能正常导入和更新
+- MetaCubeXD 能正确显示节点列表
+- 手动在 MetaCubeXD 切换到不同节点，curl 验证出口 IP 变化
+- Selector 组配置正确，route.final 指向 select 而非 urltest
+- cache_file 持久化生效，重启容器后手动选择仍保留
+- 所有的协议节点至少有一个能正常工作
+
+SSH 状态：完全不受影响（没有改任何路由）
+
+### 第二阶段：TUN 透明代理（第 4 天起）
+
+目标：接管宿主机全部流量
+
+先决条件：
+- 第一阶段所有验证项通过
+- 已执行 backup-network-state.sh 备份网络状态
+- recovery.sh 已验证可执行
+
+配置变化：
+- 在 inbounds 中新增 TUN 入站
+- 开启 auto_route + auto_redirect
+- 保留 mixed 入站作为备用入口
+- route_exclude_address_set 排除局域网和节点 IP
+- 路由规则 SSH 22 端口直连
+
+验证：
+- 先小范围确认（curl 验证出口 IP 与 MetaCubeXD 显示一致）
+- 确认 SSH 不断连
+- 全部正常后再投入正式使用
+
+SSH 风险：已降低到最低，但理论上仍存在（机场换 IP、配置 typo）
+恢复手段：recovery.sh 一键恢复
+
+---
+
+## 7. 最终推荐方案
 
 ### 推荐组合
 
 后端：sing-box（最新稳定版，当前 v1.13+）
 前端：MetaCubeXD（ghcr.io/metacubex/metacubexd）
 部署：双容器 Docker，sing-box 用 network=host
+上线方式：强制分两阶段（先 mixed 后 TUN）
+前置条件：先执行 backup-network-state.sh + 确认 recovery.sh 可用
 
-### 理由总结
+### 核心设计要点（优先级排序）
 
-- 协议全覆盖：唯一支持全部八种协议的后端
-- Docker TUN 最成熟：auto_redirect 原生解决桥接冲突
-- 前后端同步已解决：cache_file 持久化确保选择不丢失
-- 手动选择保证生效：Selector + final 指向正确的双保险
-- 架构安全隔离：容器内运行，不修改宿主机系统文件
-- Web UI 独立部署：MetaCubeXD 作为独立容器，与 sing-box 解耦
+第一优先：配置架构（解决你之前的问题）
+- Selector 出站 + route.final = select（手动选择才能生效）
+- cache_file.enabled = true（选择持久化，重启不丢失）
+- MetaCubeXD 独立容器部署，不依赖 sing-box 内置服务
+
+第二优先：安全防护（防止再弄坏 SSH）
+- 分阶段上线（关键中的关键）
+- auto_redirect + auto_detect_interface + bind_interface
+- 恢复脚本前置（部署前先备份，出事一键恢复）
+
+第三优先：协议兼容（not 协议覆盖 = 机场兼容）
+- sing-box 协议全不代表所有机场都能用
+- 订阅转换方案需要单独评估（Sub-Store / sing-box-subscribe）
+- 机场实现差异可能导致配置参数需要微调
+
+### 与之前方案的关键差异
+
+你之前的方案：sing-box + Yacd（本机直接安装 + TUN）
+- 路由 final 指向 urltest → 手动选择不生效
+- 无排除规则 → SSH 被吃
+- 无恢复手段 → 重装系统
+
+本方案的关键改进：
+- route.final = select → 手动选择生效
+- 分阶段上线 → 即使 TUN 翻车，SSH 还在
+- 前置备份 + recovery.sh → 不用重装系统
+- MetaCubeXD（独立容器）→ UI 不与后端状态耦合
 
 ### 下一步
 
-如果确认此方案，将进入规格设计阶段，内容包括：
+如果确认此方案，将进入实施计划阶段，内容包括：
 - Docker Compose 编排文件
-- sing-box 完整配置模板（TUN + DNS + 路由 + 出站 + 订阅）
-- 订阅转换方案（Sub-Store 或 sing-box-subscribe）
-- 安全防护规则（SSH 排除 / 节点 IP 排除 / crontab 兜底）
-- 容器网络和防火墙规划
+- 第一阶段 sing-box 配置模板（mixed 模式）
+- 第二阶段 TUN 增量配置
+- 订阅转换方案
+- 一键部署脚本
+- 恢复流程文档
