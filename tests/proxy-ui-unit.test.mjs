@@ -913,12 +913,12 @@ test('延迟语义背景色 .delay-good 使用 #14532d 背景 #4ade80 文字', a
   assert.match(css, /\.delay-good\s*\{[^}]*color:\s*#4ade80/s);
 });
 
-test('延迟语义背景色 .delay-warning 使用 #422006 背景 #fde047 文字', async () => {
+test('延迟语义背景色 .delay-warning 使用 #422006 背景 #facc15 文字', async () => {
   const css = await readFile(stylesCss, 'utf8');
 
   assert.doesNotMatch(css, /\.delay-warning\s*\{[^}]*border-left/);
   assert.match(css, /\.delay-warning\s*\{[^}]*background-color:\s*#422006/s);
-  assert.match(css, /\.delay-warning\s*\{[^}]*color:\s*#fde047/s);
+  assert.match(css, /\.delay-warning\s*\{[^}]*color:\s*#facc15/s);
 });
 
 test('延迟语义背景色 .delay-poor 使用 #2e1065 背景 #c4b5fd 文字', async () => {
@@ -1009,14 +1009,28 @@ test('chip 结构 CSS 类 .chip.delay-excellent 存在', async () => {
 
   assert.match(css, /\.chip\s*\{/);
   assert.match(css, /\.chip\.delay-/);
-  assert.match(css, /\.chip\.speed-/);
   assert.match(css, /\.chip\.node-name\s*\{/);
+  // .chip.speed-* 已移除（速度 chip 不再使用）
+  assert.doesNotMatch(css, /\.chip\.speed-excellent\s*\{/);
+  assert.doesNotMatch(css, /\.chip\.speed-good\s*\{/);
+  assert.doesNotMatch(css, /\.chip\.speed-timeout\s*\{/);
+  assert.doesNotMatch(css, /\.chip\.speed-unknown\s*\{/);
 });
 
-test('速度 chip .chip.speed-unknown 存在样式', async () => {
-  const css = await readFile(stylesCss, 'utf8');
+// ============================================================
+// Task 6：视觉系统整合 — 新增选择器结构测试
+// ============================================================
 
-  assert.match(css, /\.chip\.speed-unknown\s*\{/);
+test('CSS 包含区域标题、地域徽章、路由轨道和健康指标样式', async () => {
+  const css = await readFile(stylesCss, 'utf8');
+  for (const selector of [
+    '.hero-actions', '.capability-title', '.mode-banner', '.route-track', '.route-chip',
+    '.section-heading', '.region-badge', '.health-metrics', '.availability-metric',
+    '.delay-metric', '.summary-actions', '.node-delay-badge',
+  ]) {
+    assert.match(css, new RegExp(selector.replace(/\./g, '\\.')));
+  }
+  assert.doesNotMatch(css, /\.toolbar\s*\{/);
 });
 
 // ============================================================

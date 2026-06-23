@@ -220,25 +220,196 @@ select:focus {
   box-shadow: none;
 }
 
-/* ---- 工具条 ---- */
+/* ---- hero 操作区（替代旧 .toolbar） ---- */
 
-.toolbar {
+.hero-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
-  margin-bottom: 16px;
-  padding: 14px;
-  border-radius: var(--radius-lg);
-  background: var(--bg-card);
-  border: 1px solid var(--border-color);
-  box-shadow: var(--shadow-card);
+  gap: 0.5rem;
+  align-items: center;
 }
 
-.toolbar button {
-  padding: 10px 16px;
-  border-radius: var(--radius-sm);
-  font-size: 14px;
+/* ---- 能力标题（自动组/手动组一级标题） ---- */
+
+.capability-title {
+  font-size: 1.25rem;
+  font-weight: 800;
+  border-bottom: 2px solid var(--border-color);
+  padding-bottom: 0.5rem;
+  margin-bottom: 1rem;
 }
+
+/* ---- 模式状态横幅 ---- */
+
+.mode-banner {
+  padding: 0.75rem 1rem;
+  border-radius: 0.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.mode-automatic {
+  border: 1px solid #1d4ed8;
+  background: rgba(29, 78, 216, 0.12);
+  color: #93c5fd;
+}
+
+.mode-manual {
+  border: 1px solid var(--green);
+  background: rgba(34, 197, 94, 0.12);
+  color: #86efac;
+}
+
+.mode-direct {
+  border: 1px solid var(--gray);
+  background: rgba(100, 116, 139, 0.12);
+  color: var(--text-secondary);
+}
+
+/* ---- 三段式航线轨道 ---- */
+
+.route-track {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.route-chip {
+  padding: 0.25rem 0.75rem;
+  border-radius: 999px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  font-size: 0.85rem;
+}
+
+.route-arrow {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+/* ---- 大区域标题 ---- */
+
+.section-heading {
+  font-size: 1.1rem;
+  margin-bottom: 0.75rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.section-icon {
+  display: inline-flex;
+  align-items: center;
+  margin-right: 0.25rem;
+}
+
+/* ---- 地域徽章 ---- */
+
+.region-badge {
+  padding: 0.2rem 0.6rem;
+  border-radius: 0.5rem;
+  font-size: 0.85rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border-light);
+  transition: transform 0.15s ease;
+}
+
+.region-badge:hover {
+  transform: translateY(-1px);
+}
+
+/* ---- 摘要行布局 ---- */
+
+.summary-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.summary-main {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+/* ---- 紧凑健康指标 ---- */
+
+.health-metrics {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.availability-metric {
+  display: flex;
+  align-items: baseline;
+  gap: 0.25rem;
+}
+
+.delay-metric {
+  display: flex;
+  align-items: baseline;
+  gap: 0.25rem;
+  transform: translateY(-2px);
+}
+
+.available-count {
+  font-size: 1.1rem;
+  font-weight: 800;
+  color: var(--green);
+}
+
+.total-count {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+/* ---- 右侧操作组 ---- */
+
+.summary-actions {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.group-locate-btn {
+  padding: 4px 12px;
+  font-size: 12px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-card-hover);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-color);
+  flex-shrink: 0;
+}
+
+.group-locate-btn:hover {
+  background: var(--bg-card);
+  border-color: var(--border-light);
+}
+
+/* ---- 节点延时 badge ---- */
+
+.node-delay-badge {
+  position: absolute;
+  bottom: 0.5rem;
+  right: 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.node-delay-badge.delay-excellent { color: #86efac; }
+.node-delay-badge.delay-good { color: #4ade80; }
+.node-delay-badge.delay-warning { color: #facc15; }
+.node-delay-badge.delay-poor { color: #c4b5fd; }
+.node-delay-badge.delay-timeout { color: #fca5a5; }
+.node-delay-badge.delay-unknown { color: #94a3b8; }
 
 /* ---- 测速按钮 (绿色) ---- */
 
@@ -352,6 +523,7 @@ summary::-webkit-details-marker {
 }
 
 .node-card {
+  position: relative;
   min-width: 320px;
   padding: 10px 14px;
   border-radius: var(--radius-md);
@@ -412,15 +584,12 @@ button.node-card {
 
 .chip.delay-excellent { background-color: #052e16; color: #86efac; }
 .chip.delay-good { background-color: #14532d; color: #4ade80; }
-.chip.delay-warning { background-color: #422006; color: #fde047; }
+.chip.delay-warning { background-color: #422006; color: #facc15; }
 .chip.delay-poor { background-color: #2e1065; color: #c4b5fd; }
 .chip.delay-timeout { background-color: #450a0a; color: #fca5a5; }
 .chip.delay-unknown { background-color: #1e293b; color: #94a3b8; }
 
-.chip.speed-unknown { background-color: #1e293b; color: #94a3b8; }
-.chip.speed-excellent { background-color: #052e16; color: #86efac; }
-.chip.speed-good { background-color: #14532d; color: #4ade80; }
-.chip.speed-timeout { background-color: #450a0a; color: #fca5a5; }
+/* .chip.speed-* 已移除 — 速度 chip 不再使用 */
 
 .chip.node-name {
   background: rgba(255, 255, 255, 0.06);
@@ -576,15 +745,26 @@ select:focus-visible {
     padding: 14px;
   }
 
-  .toolbar {
+  .hero-actions {
     flex-direction: column;
+    align-items: flex-start;
   }
 
-  .toolbar button {
+  .hero-actions button {
     width: 100%;
   }
 
+  .route-track {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
   .summary-row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .summary-content {
     flex-direction: column;
     align-items: flex-start;
   }
