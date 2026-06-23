@@ -353,7 +353,8 @@ select:focus {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  font-size: 1.1rem;
+  font-size: 1.5rem;
+  font-weight: 900;
   margin-bottom: 0.75rem;
   padding-bottom: 0.5rem;
   border-bottom: 1px solid var(--border-color);
@@ -362,8 +363,8 @@ select:focus {
 .section-icon {
   display: inline-flex;
   align-items: center;
-  width: 1.15em;
-  height: 1.15em;
+  width: 1.4em;
+  height: 1.4em;
   flex: 0 0 auto;
   color: var(--accent);
   stroke: currentColor;
@@ -751,24 +752,18 @@ button.node-card {
 }
 
 .node-card.active {
-  border-color: rgba(129, 140, 248, 0.95);
-  background-image: radial-gradient(circle at 12% 18%, rgba(129, 140, 248, 0.30), transparent 34%);
-  box-shadow: 0 0 0 1px rgba(129, 140, 248, 0.72), 0 0 28px rgba(129, 140, 248, 0.34), inset 0 1px 0 rgba(255, 255, 255, 0.16);
+  border: 2px solid rgba(147, 197, 253, 0.98);
+  background: linear-gradient(135deg, rgba(30, 64, 175, 0.58), rgba(17, 24, 39, 0.98));
 }
 
-.node-card.active::before {
-  content: "";
-  position: absolute;
-  inset: 8px auto 8px 6px;
-  width: 4px;
-  border-radius: 999px;
-  background: linear-gradient(180deg, rgba(224, 231, 255, 0.95), rgba(129, 140, 248, 0.80));
-  box-shadow: 0 0 18px rgba(129, 140, 248, 0.72);
+.node-card.active .node-name {
+  color: #eff6ff;
+  font-weight: 900;
 }
 
 .node-card-active {
-  border-color: rgba(129, 140, 248, 0.95);
-  box-shadow: 0 0 0 1px rgba(129, 140, 248, 0.72), 0 0 28px rgba(129, 140, 248, 0.34);
+  border: 2px solid rgba(147, 197, 253, 0.98);
+  background: linear-gradient(135deg, rgba(30, 64, 175, 0.58), rgba(17, 24, 39, 0.98));
 }
 
 .node-card.active:hover,

@@ -1149,14 +1149,51 @@ test('节点卡片 .node-card 最小宽度 320px', async () => {
   assert.match(css, /\.node-card\s*\{[^}]*min-width:\s*320px/s);
 });
 
-test('选中节点态使用 active 或 is-active 强化边框、阴影或高光层', async () => {
+test('选中节点态使用强背景和粗边框，不使用强发光作为主要视觉', async () => {
   const css = await readFile(stylesCss, 'utf8');
   const activeBlock = cssBlock(css, '.node-card.active') || cssBlock(css, '.node-card.is-active');
   const pseudoBlock = cssBlock(css, '.node-card.active::before') || cssBlock(css, '.node-card.is-active::before');
+  const plainBlock = cssBlock(css, '.node-card');
 
   assert.ok(activeBlock, '必须提供 .node-card.active 或 .node-card.is-active 样式');
-  assert.match(activeBlock, /border(?:-color)?:\s*(?!1px\s+solid\s+transparent)/s);
-  assert.match(`${activeBlock}\n${pseudoBlock}`, /box-shadow:|outline:|::before|radial-gradient/s);
+  assert.match(activeBlock, /border(?:-width)?:\s*(?:[23]px|[23]px\s+solid)|border:\s*[23]px\s+solid/s);
+  assert.match(activeBlock, /background(?:-image)?:/s);
+  assert.notEqual(
+    activeBlock.match(/background(?:-image)?:\s*([^;]+);/s)?.[1]?.trim(),
+    plainBlock.match(/background(?:-image)?:\s*([^;]+);/s)?.[1]?.trim(),
+    'active 背景必须区别于普通卡片',
+  );
+  assert.doesNotMatch(activeBlock, /0\s+0\s+(?:28|32)px|box-shadow:[^;]*(?:rgba\([^)]*,\s*0\.(?:3|4|5|6|7|8|9)|#)/s);
+  assert.equal(pseudoBlock, '', '选中态不应依赖 ::before 高光 marker');
+});
+
+test('选中节点名有独立高亮文字规则', async () => {
+  const css = await readFile(stylesCss, 'utf8');
+  const nodeNameBlock = cssBlock(css, '.node-card.active .node-name');
+
+  assert.ok(nodeNameBlock, '必须提供 .node-card.active .node-name 独立规则');
+  assert.match(nodeNameBlock, /color:\s*(?!var\(--text-secondary\)|var\(--text-muted\)|#94a3b8|#64748b)[^;]+;/s);
+  assert.match(nodeNameBlock, /font-weight:\s*(?:800|900)/s);
+});
+
+test('一级标题和 SVG 图标字号足够醒目', async () => {
+  const css = await readFile(stylesCss, 'utf8');
+  const headingBlock = cssBlock(css, '.section-heading');
+  const iconBlock = cssBlock(css, '.section-icon');
+
+  assert.match(headingBlock, /font-size:\s*(?:1\.(?:4[5-9]|[5-9]\d*)rem|(?:2[4-9]|[3-9]\d)px)/s);
+  assert.match(headingBlock, /font-weight:\s*(?:850|900)/s);
+  assert.match(iconBlock, /width:\s*(?:1\.(?:3[5-9]|[4-9]\d*)em|(?:2[4-9]|[3-9]\d)px)/s);
+  assert.match(iconBlock, /height:\s*(?:1\.(?:3[5-9]|[4-9]\d*)em|(?:2[4-9]|[3-9]\d)px)/s);
+});
+
+test('自动和手动代理选择标题都使用统一 section-heading', async () => {
+  const html = await readFile(indexHtml, 'utf8');
+  const appSource = await readFile(join(__dirname, '..', 'ui', 'app.mjs'), 'utf8');
+
+  assert.match(html, /<h2[^>]*class="section-heading"[^>]*>[\s\S]*自动代理选择器[\s\S]*<\/h2>/);
+  assert.match(appSource, /manualHeading\.className\s*=\s*'section-heading'/);
+  assert.match(appSource, /appendSectionHeadingContent\([^,]+,\s*manualHeading,\s*'手动代理选择区域'\)/);
 });
 
 test('按钮有 hover 和 active 伪类样式', async () => {
