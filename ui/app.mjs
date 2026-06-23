@@ -4,6 +4,40 @@ const selectorName = '代理选择标签';
 
 export const readonlyAutomaticNodeMessage = '自动组不可手动选择，请去对应手动组选择';
 
+const regionFlags = new Map([
+  ['香港', '🇭🇰'], ['澳门', '🇲🇴'], ['新加坡', '🇸🇬'], ['美国', '🇺🇸'],
+  ['日本', '🇯🇵'], ['台湾', '🇹🇼'], ['英国', '🇬🇧'], ['法国', '🇫🇷'],
+  ['德国', '🇩🇪'], ['加拿大', '🇨🇦'], ['澳大利亚', '🇦🇺'], ['泰国', '🇹🇭'],
+  ['菲律宾', '🇵🇭'], ['马来西亚', '🇲🇾'], ['印尼', '🇮🇩'], ['越南', '🇻🇳'],
+  ['印度', '🇮🇳'], ['土耳其', '🇹🇷'], ['俄罗斯', '🇷🇺'], ['荷兰', '🇳🇱'],
+  ['巴西', '🇧🇷'], ['乌克兰', '🇺🇦'], ['沙特', '🇸🇦'], ['卡塔尔', '🇶🇦'],
+]);
+
+export function regionFlag(regionName) {
+  return regionFlags.get(regionName) || '📍';
+}
+
+export function regionBadgeLabel(regionName) {
+  return `${regionFlag(regionName)} ${regionName}`;
+}
+
+export function formatSelectorSegment(selector) {
+  return (selector || '未选择').split('/').filter(Boolean).join(' / ');
+}
+
+export function parseRouteSegments(selector, nodeName) {
+  const selectorText = formatSelectorSegment(selector);
+  const parts = String(nodeName || '').split('-');
+  if (parts.length < 3) return { selector: selectorText, provider: '', node: nodeName || '未选择', fallback: true };
+  const [region, airport, ...nodeParts] = parts;
+  return {
+    selector: selectorText,
+    provider: `${regionFlag(region)} ${region} · ${airport}`,
+    node: nodeParts.join('-'),
+    fallback: false,
+  };
+}
+
 export function displayGroupName(groupName) {
   const match = groupName.match(/^按机场\/(.+)\/手动组$/);
   if (match) return match[1];
@@ -99,7 +133,7 @@ function compareScope(left, right) {
 
 export function statusFromDelay(delayMs, failed = false) {
   if (failed) return 'timeout';
-  if (typeof delayMs !== 'number') return 'unknown';
+  if (typeof delayMs !== 'number' || Number.isNaN(delayMs)) return 'timeout';
   if (delayMs < 500) return 'excellent';
   if (delayMs < 1000) return 'good';
   if (delayMs < 2000) return 'warning';
@@ -107,7 +141,7 @@ export function statusFromDelay(delayMs, failed = false) {
 }
 
 function normalizeDelayEntry(entry) {
-  if (!entry) return { status: 'unknown' };
+  if (!entry) return { status: 'timeout' };
   const status = entry.status || statusFromDelay(entry.delayMs, entry.failed || entry.error);
   if (status === 'timeout' || status === 'error') return { status: 'timeout' };
   if (typeof entry.delayMs === 'number') return { delayMs: entry.delayMs, status };
@@ -116,11 +150,11 @@ function normalizeDelayEntry(entry) {
 
 function delayFromHistory(history) {
   const latest = history?.at(-1);
-  if (!latest) return undefined;
+  if (!latest) return { status: 'timeout' };
   const delayMs = typeof latest.delayMs === 'number' ? latest.delayMs : latest.delay;
   if (delayMs === 0 || latest.failed || latest.error) return { status: 'timeout' };
   if (typeof delayMs === 'number') return { delayMs, status: statusFromDelay(delayMs) };
-  return undefined;
+  return { status: 'timeout' };
 }
 
 function buildDelayCache(proxies, optionDelayCache) {
@@ -155,13 +189,15 @@ function sortNodesByDelay(nodeNames, delayCache) {
     }));
 }
 
-function buildManualGroup(proxy, parsed, delayCache) {
+function buildManualGroup(proxy, parsed, delayCache, currentManualGroup) {
   const nodes = sortNodesByDelay(proxy.all || [], delayCache);
   const currentNodeDelay = normalizeDelayEntry(delayCache.get(proxy.now));
+  const activeNodeName = parsed.proxy.name === currentManualGroup ? proxy.now || '' : '';
   return {
     ...proxy,
     scopeName: parsed.scopeName,
     sectionTitle: parsed.sectionTitle,
+    activeNodeName,
     nodes,
     availableCount: nodes.filter((node) => availableDelayStatuses.has(node.delayStatus)).length,
     totalCount: nodes.length,
@@ -171,14 +207,14 @@ function buildManualGroup(proxy, parsed, delayCache) {
   };
 }
 
-function buildManualSections(groups, delayCache) {
+function buildManualSections(groups, delayCache, currentManualGroup) {
   const parsedGroups = groups
     .filter((proxy) => proxy.type === 'Selector' && proxy.name.endsWith('/手动组'))
     .map((proxy) => ({ ...parseScopedGroupName(proxy.name, '手动组'), proxy, name: proxy.name }))
     .sort(compareScope);
   const sections = ['全部聚合', '按机场', '按地区', '未分类'].map((title) => ({ title, groups: [] }));
   for (const parsed of parsedGroups) {
-    sections.find((section) => section.title === parsed.sectionTitle).groups.push(buildManualGroup(parsed.proxy, parsed, delayCache));
+    sections.find((section) => section.title === parsed.sectionTitle).groups.push(buildManualGroup(parsed.proxy, parsed, delayCache, currentManualGroup));
   }
   return sections;
 }
@@ -230,7 +266,7 @@ export function buildProxyUiModel(proxies, options = {}) {
     })),
     automaticSelectorOptions,
     currentManualGroup,
-    manualSections: buildManualSections(groups, delayCache),
+    manualSections: buildManualSections(groups, delayCache, currentManualGroup),
     routeLabel: `${selector.now || '未选择'} → ${routeTarget}`,
     sections: [...sectionMap].map(([title, items]) => ({ title, items })),
     selectedAutomaticGroup,

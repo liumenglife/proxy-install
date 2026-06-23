@@ -228,7 +228,7 @@ test('模型按固定顺序派生手动组、自动组、延时状态和统计',
     'poor',
     'timeout',
     'timeout',
-    'unknown',
+    'timeout',
   ]);
   assert.equal(aggregateGroup.availableCount, 4);
   assert.equal(aggregateGroup.totalCount, 7);
@@ -277,7 +277,7 @@ test('模型默认从代理 history 的最近记录派生节点延时并排序',
     ['节点快', 80, 'excellent'],
     ['节点慢', 900, 'good'],
     ['节点超时', undefined, 'timeout'],
-    ['节点未知', undefined, 'unknown'],
+    ['节点未知', undefined, 'timeout'],
   ]);
   assert.deepEqual(aggregateGroup.currentNodeDelay, { delayMs: 900, status: 'good' });
 });
@@ -981,5 +981,68 @@ test('速度 chip .chip.speed-unknown 存在样式', async () => {
   const css = await readFile(stylesCss, 'utf8');
 
   assert.match(css, /\.chip\.speed-unknown\s*\{/);
+});
+
+// ============================================================
+// Task 1：模型纯函数与单元契约
+// ============================================================
+
+test('延时无有效 ms 时统一归入 timeout', () => {
+  assert.equal(proxyUi.statusFromDelay(undefined), 'timeout');
+  assert.equal(proxyUi.statusFromDelay(null), 'timeout');
+  assert.equal(proxyUi.statusFromDelay(Number.NaN), 'timeout');
+  assert.equal(proxyUi.statusFromDelay(0, true), 'timeout');
+  assert.equal(proxyUi.statusFromDelay(238), 'excellent');
+});
+
+test('解析实际路由为分类、机场、具体节点三段', () => {
+  const route = proxyUi.parseRouteSegments(
+    '按地区/美国/自动组',
+    '美国-猫熊机场-🇺🇸 直连-V350-美国-1x-NF&HBO&Disney*',
+  );
+
+  assert.deepEqual(route, {
+    selector: '按地区 / 美国 / 自动组',
+    provider: '🇺🇸 美国 · 猫熊机场',
+    node: '🇺🇸 直连-V350-美国-1x-NF&HBO&Disney*',
+    fallback: false,
+  });
+});
+
+test('路由拆分失败时保守回退到完整节点名', () => {
+  const route = proxyUi.parseRouteSegments('全部聚合/自动组', '无法拆分节点');
+
+  assert.deepEqual(route, {
+    selector: '全部聚合 / 自动组',
+    provider: '',
+    node: '无法拆分节点',
+    fallback: true,
+  });
+});
+
+test('地区旗帜映射和地域徽章标签', () => {
+  assert.equal(proxyUi.regionFlag('香港'), '🇭🇰');
+  assert.equal(proxyUi.regionFlag('澳门'), '🇲🇴');
+  assert.equal(proxyUi.regionFlag('新加坡'), '🇸🇬');
+  assert.equal(proxyUi.regionFlag('美国'), '🇺🇸');
+  assert.equal(proxyUi.regionFlag('未知地区'), '📍');
+  assert.equal(proxyUi.regionBadgeLabel('香港'), '🇭🇰 香港');
+});
+
+test('只有代理选择标签指向的手动组显示选中态', () => {
+  const proxySet = {
+    '代理选择标签': { name: '代理选择标签', type: 'Selector', now: '按地区/香港/手动组', all: [] },
+    '按地区/香港/手动组': { name: '按地区/香港/手动组', type: 'Selector', now: '香港-猫熊机场-A', all: ['香港-猫熊机场-A'] },
+    '按机场/猫熊机场/手动组': { name: '按机场/猫熊机场/手动组', type: 'Selector', now: '香港-猫熊机场-A', all: ['香港-猫熊机场-A'] },
+    '全部聚合/手动组': { name: '全部聚合/手动组', type: 'Selector', now: '香港-猫熊机场-A', all: ['香港-猫熊机场-A'] },
+  };
+  const model = buildProxyUiModel(proxySet);
+  const regionGroup = model.manualSections.find((s) => s.title === '按地区').groups[0];
+  const airportGroup = model.manualSections.find((s) => s.title === '按机场').groups[0];
+  const aggregateGroup = model.manualSections.find((s) => s.title === '全部聚合').groups[0];
+
+  assert.equal(regionGroup.activeNodeName, '香港-猫熊机场-A');
+  assert.equal(airportGroup.activeNodeName, '');
+  assert.equal(aggregateGroup.activeNodeName, '');
 });
 
