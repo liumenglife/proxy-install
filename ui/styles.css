@@ -255,6 +255,13 @@ select:focus {
   gap: 0.5rem;
 }
 
+.mode-icon {
+  width: 1.25rem;
+  height: 1.25rem;
+  flex: 0 0 auto;
+  stroke: currentColor;
+}
+
 .mode-automatic {
   border: 1px solid #1d4ed8;
   background: rgba(29, 78, 216, 0.12);
@@ -287,8 +294,8 @@ select:focus {
 .route-panel-title {
   margin: 0 0 14px;
   color: var(--text-primary);
-  font-size: clamp(20px, 3vw, 30px);
-  font-weight: 900;
+  font-size: 1.35rem;
+  font-weight: 850;
   letter-spacing: -0.02em;
   text-transform: none;
 }
@@ -298,6 +305,7 @@ select:focus {
   align-items: center;
   gap: 0.75rem;
   flex-wrap: wrap;
+  font-size: 1.05rem;
 }
 
 .route-chip {

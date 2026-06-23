@@ -430,12 +430,20 @@ test('HTML 页面不包含"一级分组/手动组"重复文本且顶部标题为
 test('实际路由标签标题和值同在显眼 route panel 中', async () => {
   const html = await readFile(indexHtml, 'utf8');
 
-  assert.match(html, /实际路由标签/);
+  assert.match(html, /实际路由标签：/);
   assert.match(html, /data-testid="route-track"/);
   assert.match(
     html,
-    /<(?:section|div)[^>]*class="[^"]*(?:route-panel|panel)[^"]*"[^>]*>[\s\S]*实际路由标签[\s\S]*data-testid="route-track"[\s\S]*<\/(?:section|div)>/,
+    /<section[^>]*class="[^"]*route-panel[^"]*"[^>]*>[\s\S]*实际路由标签：[\s\S]*data-testid="route-track"[\s\S]*<\/section>/,
   );
+});
+
+test('HTML 移除自动组选择器重复小字但保留可访问名称', async () => {
+  const html = await readFile(indexHtml, 'utf8');
+
+  assert.doesNotMatch(html, /自动组代理选择器<\/label>/);
+  assert.doesNotMatch(html, /id="manual-status"/);
+  assert.match(html, /<select[^>]*id="auto-group-select"[^>]*aria-label="自动组代理选择器"/);
 });
 
 test('分组模型的 displayGroupName 不含"/手动组"前缀且不重复', () => {
@@ -707,6 +715,34 @@ test('CSS 为 svg.section-icon 提供可样式化尺寸和颜色', async () => {
   assert.match(css, /\.section-icon\s*\{[^}]*width:/s);
   assert.match(css, /\.section-icon\s*\{[^}]*height:/s);
   assert.match(css, /\.section-icon\s*\{[^}]*(?:stroke:|color:)/s);
+});
+
+test('CSS 放大实际路由区域标题和值字号', async () => {
+  const css = await readFile(stylesCss, 'utf8');
+
+  assert.match(css, /\.route-panel-title\s*\{[^}]*font-size:\s*(?:1\.(?:2[5-9]|[3-9]\d*)rem|(?:2\d|[3-9]\d)px)/s);
+  assert.match(css, /\.route-panel-title\s*\{[^}]*font-weight:\s*(?:[89]\d\d|bold|bolder)/s);
+  assert.match(css, /\.route-track\s*\{[^}]*font-size:\s*(?:1(?:\.\d+)?rem|(?:1[6-9]|[2-9]\d)px)/s);
+});
+
+test('renderModeBanner 渲染 SVG 矢量图标且不包含 mode emoji', () => {
+  const container = createMockElement();
+  const mockDoc = createMockDocument();
+
+  assert.equal(typeof proxyUi.renderModeBanner, 'function');
+  proxyUi.renderModeBanner(container, { type: 'automatic', label: '自动模式' }, mockDoc);
+
+  const icon = container.querySelector('.mode-icon');
+  assert.ok(icon, 'mode banner 应包含 .mode-icon');
+  assert.equal(icon.tagName, 'svg');
+  assert.equal(icon.getAttribute('aria-hidden'), 'true');
+  assert.doesNotMatch(container.textContent, /🤖|🎯|⚡|❓/);
+});
+
+test('源码不包含 mode banner emoji', async () => {
+  const appSource = await readFile(join(__dirname, '..', 'ui', 'app.mjs'), 'utf8');
+
+  assert.doesNotMatch(appSource, /🤖|🎯|⚡|❓/);
 });
 
 test('无手动选中节点时分组摘要不显示节点名或延时', () => {

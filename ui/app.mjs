@@ -447,11 +447,41 @@ function setText(id, text) {
   if (element) element.textContent = text;
 }
 
-function renderModeBanner(container, mode) {
+export function createModeIcon(doc, modeType) {
+  const svg = createSvgElement(doc, 'svg');
+  svg.setAttribute('class', 'mode-icon');
+  if (typeof svg.className === 'string') svg.className = 'mode-icon';
+  else if (svg.className?.baseVal !== undefined) svg.className.baseVal = 'mode-icon';
+  svg.setAttribute('aria-hidden', 'true');
+  svg.setAttribute('viewBox', '0 0 24 24');
+  svg.setAttribute('fill', 'none');
+  svg.setAttribute('stroke', 'currentColor');
+  svg.setAttribute('stroke-width', '2');
+  svg.setAttribute('stroke-linecap', 'round');
+  svg.setAttribute('stroke-linejoin', 'round');
+
+  const pathsByType = {
+    automatic: ['M5 12h14', 'M12 5l7 7-7 7', 'M5 5v14'],
+    manual: ['M4 21v-7', 'M4 10V3', 'M12 21v-9', 'M12 8V3', 'M20 21v-5', 'M20 12V3', 'M2 14h4', 'M10 8h4', 'M18 16h4'],
+    direct: ['M13 2L4 14h7l-1 8 9-12h-7l1-8z'],
+    unknown: ['M9.09 9a3 3 0 1 1 5.82 1c-.64 1.43-2.91 1.65-2.91 4', 'M12 17h.01'],
+  };
+
+  for (const d of pathsByType[modeType] || pathsByType.unknown) {
+    const path = createSvgElement(doc, 'path');
+    path.setAttribute('d', d);
+    svg.append(path);
+  }
+  return svg;
+}
+
+export function renderModeBanner(container, mode, docOverride) {
   if (!container) return;
+  const doc = docOverride || document;
   container.className = `mode-banner mode-${mode.type}`;
-  const iconMap = { automatic: '🤖', manual: '🎯', direct: '⚡', unknown: '❓' };
-  container.textContent = `${iconMap[mode.type] || '❓'} ${mode.label}`;
+  const label = doc.createElement('span');
+  label.textContent = mode.label;
+  container.replaceChildren(createModeIcon(doc, mode.type), label);
 }
 
 function renderRouteTrack(container, segments) {
@@ -806,8 +836,6 @@ async function render(api, state = {}, interactionTracker) {
   state.proxies = proxies;
   const model = buildProxyUiModel(proxies, { delayCache: state.delayCache });
   state.currentModel = model;
-
-  setText('manual-status', model.currentManualGroup ? `当前为手动组：${model.currentManualGroup}` : '当前为自动组');
 
   updateProxyToggleUI(model.selectorNow !== 'direct');
 
