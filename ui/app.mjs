@@ -550,6 +550,62 @@ function summaryDelayText(group) {
   return 'timeout';
 }
 
+function buildGroupSummaryElements(doc, group) {
+  const summaryRow = doc.createElement('span');
+  summaryRow.className = 'summary-row';
+
+  const leftSpan = doc.createElement('span');
+  if (group.sectionTitle === '按地区') {
+    leftSpan.className = 'region-badge';
+    leftSpan.textContent = regionBadgeLabel(group.scopeName);
+  } else if (group.sectionTitle === '按机场') {
+    leftSpan.className = 'airport-label';
+    leftSpan.textContent = group.scopeName;
+  } else {
+    leftSpan.className = 'aggregate-label';
+    leftSpan.textContent = '全部节点';
+  }
+
+  const healthMetrics = doc.createElement('span');
+  healthMetrics.className = 'health-metrics';
+
+  const availabilityMetric = doc.createElement('span');
+  availabilityMetric.className = 'availability-metric';
+  const availStrong = doc.createElement('strong');
+  availStrong.textContent = String(group.availableCount);
+  availabilityMetric.append(availStrong, doc.createTextNode(` / ${group.totalCount}`));
+
+  const delayMetric = doc.createElement('span');
+  delayMetric.className = 'delay-metric';
+  delayMetric.textContent = summaryDelayText(group);
+
+  healthMetrics.append(availabilityMetric, delayMetric);
+
+  const summaryNodeSpan = doc.createElement('span');
+  summaryNodeSpan.className = 'summary-node-name';
+  summaryNodeSpan.textContent = group.activeNodeName || '未选中节点';
+
+  const summaryActions = doc.createElement('span');
+  summaryActions.className = 'summary-actions';
+
+  const groupSpeedBtn = doc.createElement('button');
+  groupSpeedBtn.type = 'button';
+  groupSpeedBtn.className = 'group-speedtest-btn';
+  groupSpeedBtn.textContent = '测速';
+  groupSpeedBtn.setAttribute('data-testid', `group-speedtest-${group.name}`);
+
+  const locateBtn = doc.createElement('button');
+  locateBtn.type = 'button';
+  locateBtn.className = 'group-locate-btn';
+  locateBtn.textContent = '定位📌';
+  locateBtn.setAttribute('data-testid', `group-locate-${group.name}`);
+
+  summaryActions.append(groupSpeedBtn, locateBtn);
+  summaryRow.append(leftSpan, healthMetrics, summaryNodeSpan, summaryActions);
+
+  return { summaryRow, groupSpeedBtn, locateBtn };
+}
+
 export function renderProxyGroups(container, model, docOverride) {
   const doc = docOverride || document;
   const sections = container;
@@ -568,56 +624,7 @@ export function renderProxyGroups(container, model, docOverride) {
       details.dataset.groupName = group.name;
       details.setAttribute('data-testid', 'manual-group-card');
       const summary = doc.createElement('summary');
-      const summaryRow = doc.createElement('span');
-      summaryRow.className = 'summary-row';
-
-      const leftSpan = doc.createElement('span');
-      if (group.sectionTitle === '按地区') {
-        leftSpan.className = 'region-badge';
-        leftSpan.textContent = regionBadgeLabel(group.scopeName);
-      } else if (group.sectionTitle === '按机场') {
-        leftSpan.className = 'airport-label';
-        leftSpan.textContent = group.scopeName;
-      } else {
-        leftSpan.className = 'aggregate-label';
-        leftSpan.textContent = '全部节点';
-      }
-
-      const healthMetrics = doc.createElement('span');
-      healthMetrics.className = 'health-metrics';
-
-      const availabilityMetric = doc.createElement('span');
-      availabilityMetric.className = 'availability-metric';
-      const availStrong = doc.createElement('strong');
-      availStrong.textContent = String(group.availableCount);
-      availabilityMetric.append(availStrong, doc.createTextNode(` / ${group.totalCount}`));
-
-      const delayMetric = doc.createElement('span');
-      delayMetric.className = 'delay-metric';
-      delayMetric.textContent = summaryDelayText(group);
-
-      healthMetrics.append(availabilityMetric, delayMetric);
-
-      const summaryNodeSpan = doc.createElement('span');
-      summaryNodeSpan.className = 'summary-node-name';
-      summaryNodeSpan.textContent = group.activeNodeName || '未选中节点';
-
-      const summaryActions = doc.createElement('span');
-      summaryActions.className = 'summary-actions';
-
-      const groupSpeedBtn = doc.createElement('button');
-      groupSpeedBtn.type = 'button';
-      groupSpeedBtn.className = 'group-speedtest-btn';
-      groupSpeedBtn.textContent = '测速';
-      groupSpeedBtn.setAttribute('data-testid', `group-speedtest-${group.name}`);
-
-      const locateBtn = doc.createElement('button');
-      locateBtn.type = 'button';
-      locateBtn.className = 'group-locate-btn';
-      locateBtn.textContent = '定位📌';
-
-      summaryActions.append(groupSpeedBtn, locateBtn);
-      summaryRow.append(leftSpan, healthMetrics, summaryNodeSpan, summaryActions);
+      const { summaryRow } = buildGroupSummaryElements(doc, group);
       summary.append(summaryRow);
       details.append(summary);
 
@@ -687,7 +694,7 @@ function automaticNodeButton(groupName, nodeName, onClick) {
   card.addEventListener('click', onClick);
 
   const nameChip = document.createElement('span');
-  nameChip.className = 'chip node-name';
+  nameChip.className = 'node-name';
   nameChip.textContent = nodeName;
 
   card.append(nameChip);
@@ -755,48 +762,7 @@ async function render(api, state = {}, interactionTracker) {
       if (expandedGroups.has(group.name)) details.open = true;
 
       const summary = document.createElement('summary');
-      const summaryRow = document.createElement('span');
-      summaryRow.className = 'summary-row';
-
-      const leftSpan = document.createElement('span');
-      if (group.sectionTitle === '按地区') {
-        leftSpan.className = 'region-badge';
-        leftSpan.textContent = regionBadgeLabel(group.scopeName);
-      } else if (group.sectionTitle === '按机场') {
-        leftSpan.className = 'airport-label';
-        leftSpan.textContent = group.scopeName;
-      } else {
-        leftSpan.className = 'aggregate-label';
-        leftSpan.textContent = '全部节点';
-      }
-
-      const healthMetrics = document.createElement('span');
-      healthMetrics.className = 'health-metrics';
-
-      const availabilityMetric = document.createElement('span');
-      availabilityMetric.className = 'availability-metric';
-      const availStrong = document.createElement('strong');
-      availStrong.textContent = String(group.availableCount);
-      availabilityMetric.append(availStrong, document.createTextNode(` / ${group.totalCount}`));
-
-      const delayMetric = document.createElement('span');
-      delayMetric.className = 'delay-metric';
-      delayMetric.textContent = summaryDelayText(group);
-
-      healthMetrics.append(availabilityMetric, delayMetric);
-
-      const summaryNodeSpan = document.createElement('span');
-      summaryNodeSpan.className = 'summary-node-name';
-      summaryNodeSpan.textContent = group.activeNodeName || '未选中节点';
-
-      const summaryActions = document.createElement('span');
-      summaryActions.className = 'summary-actions';
-
-      const groupSpeedBtn = document.createElement('button');
-      groupSpeedBtn.type = 'button';
-      groupSpeedBtn.className = 'group-speedtest-btn';
-      groupSpeedBtn.textContent = '测速';
-      groupSpeedBtn.setAttribute('data-testid', `group-speedtest-${group.name}`);
+      const { summaryRow, groupSpeedBtn, locateBtn } = buildGroupSummaryElements(document, group);
       groupSpeedBtn.addEventListener('click', async (e) => {
         e.preventDefault();
         e.stopPropagation();
@@ -820,11 +786,6 @@ async function render(api, state = {}, interactionTracker) {
           interactionTracker.endInteraction();
         }
       });
-
-      const locateBtn = document.createElement('button');
-      locateBtn.type = 'button';
-      locateBtn.className = 'group-locate-btn';
-      locateBtn.textContent = '定位📌';
       locateBtn.addEventListener('click', (e) => {
         e.preventDefault();
         e.stopPropagation();
@@ -840,9 +801,6 @@ async function render(api, state = {}, interactionTracker) {
           setText('status', '当前分组未选中节点');
         }
       });
-
-      summaryActions.append(groupSpeedBtn, locateBtn);
-      summaryRow.append(leftSpan, healthMetrics, summaryNodeSpan, summaryActions);
       summary.append(summaryRow);
       details.append(summary);
 
