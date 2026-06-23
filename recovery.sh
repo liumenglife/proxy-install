@@ -305,7 +305,7 @@ level2_proxy_recovery() {
     echo ""
     if [ "$api_ok" = "1" ] && [ "$proxy_ok" = "1" ]; then
         echo "  二级恢复完成：已回退到 mixed 模式"
-        echo "  MetaCubeXD 可通过 http://192.168.100.135:9090/ui 访问"
+        echo "  proxy-ui 可通过 http://192.168.100.135:9091 访问"
         return 0
     else
         echo "  二级恢复完成（部分组件异常）"

@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>代理控制台</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <a href="#main-content" class="skip-link">跳到主内容</a>
+    <main class="shell" id="main-content">
+      <header class="hero">
+        <div class="hero-left">
+          <h1>代理控制台</h1>
+          <div class="hero-subtitle">
+            <span id="sync-status" data-testid="sync-status" aria-live="polite">等待同步</span>
+            <span id="last-sync-time" data-testid="last-sync-time">最后同步：--</span>
+            <span id="proxy-state-label" data-testid="proxy-state-label" class="hint" style="min-height:0;margin:0;">代理状态：检查中...</span>
+          </div>
+        </div>
+        <button id="refresh" data-testid="sync-now" type="button">立即同步</button>
+      </header>
+
+      <section class="top-grid" data-testid="top-status-bar" aria-label="顶部控制区">
+        <div class="panel">
+          <label for="auto-group-select">自动组代理选择器</label>
+          <select id="auto-group-select" data-testid="auto-group-select"></select>
+          <p id="manual-status" class="hint"></p>
+        </div>
+        <div class="panel route-panel">
+          <span>实际路由标签</span>
+          <strong id="route-label" data-testid="route-label">加载中...</strong>
+          <p id="readonly-auto-note" class="hint" data-testid="readonly-auto-note">自动组不可手动选择，请去对应手动组选择</p>
+          <p id="status" class="hint" aria-live="polite">初始化中...</p>
+          <div class="proxy-toggle-bar">
+            <button id="proxy-toggle-btn" data-testid="proxy-toggle" type="button">关闭代理</button>
+            <button id="restart-singbox-btn" data-testid="restart-singbox" type="button">重启 sing-box 内核</button>
+          </div>
+        </div>
+      </section>
+
+      <div class="toolbar" aria-label="操作工具条">
+        <button id="test-all-btn" data-testid="test-all-delay" type="button">全部测速</button>
+        <button id="locate-current-btn" data-testid="locate-current-node" type="button">定位当前节点</button>
+        <button id="expand-all-btn" data-testid="expand-all" type="button">全部展开</button>
+        <button id="collapse-all-btn" data-testid="collapse-all" type="button">全部收起</button>
+        <span id="speedtest-progress" class="speedtest-progress"></span>
+      </div>
+
+      <div id="sections" class="sections"></div>
+    </main>
+    <script type="module" src="/app.mjs"></script>
+  </body>
+</html>

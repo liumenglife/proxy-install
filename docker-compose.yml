@@ -35,11 +35,35 @@ services:
       - SUB_STORE_DATA_BASE_PATH=/opt/app/data
       - SUB_STORE_FRONTEND_BACKEND_PATH=/
 
-  metacubexd:
-    image: ${METACUBEXD_IMAGE}
-    container_name: metacubexd
+  proxy-ui:
+    build:
+      context: .
+      dockerfile: Dockerfile.proxy-ui
+    image: ${PROXY_UI_IMAGE}
+    container_name: proxy-ui
     restart: unless-stopped
     ports:
       - "9091:80"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     environment:
       - TZ=Asia/Shanghai
+      - CONTROL_AGENT_BASE=http://control-agent:3000
+      - CONTROL_AGENT_URL=http://control-agent:3000
+
+  control-agent:
+    build:
+      context: .
+      dockerfile: Dockerfile.control-agent
+    image: ${CONTROL_AGENT_IMAGE:-proxy-install/control-agent:latest}
+    container_name: control-agent
+    restart: unless-stopped
+    expose:
+      - "3000"
+    environment:
+      - TZ=Asia/Shanghai
+      - CLASH_API_BASE=http://host.docker.internal:9090
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock

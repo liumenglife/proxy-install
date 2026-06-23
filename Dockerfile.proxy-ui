@@ -1,0 +1,8 @@
+FROM oven/bun:1.2-slim
+
+WORKDIR /app
+COPY ui/ /app/ui/
+COPY server/proxy-ui.mjs /app/server/proxy-ui.mjs
+
+ENV PORT=80
+CMD ["bun", "/app/server/proxy-ui.mjs"]

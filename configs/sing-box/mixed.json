@@ -33,6 +33,8 @@
   "outbounds": [
     { "type": "direct", "tag": "direct" },
     { "type": "block", "tag": "block" },
+    { "type": "selector", "tag": "代理选择标签", "outbounds": ["direct", "全部聚合/自动组", "全部聚合/手动组"] },
+    { "type": "selector", "tag": "GLOBAL", "outbounds": ["代理选择标签"] },
     { "type": "urltest", "tag": "全部聚合/自动组", "outbounds": ["direct"], "interval": "20s" },
     { "type": "selector", "tag": "全部聚合/手动组", "outbounds": ["direct"] }
   ],
@@ -60,7 +62,7 @@
       }
     ],
     "default_domain_resolver": "dns-local",
-    "final": "全部聚合/自动组",
+    "final": "代理选择标签",
     "auto_detect_interface": true
   },
   "experimental": {

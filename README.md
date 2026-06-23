@@ -5,7 +5,7 @@
 ## 目录结构
 
     .
-    ├── docker-compose.yml          # 3 服务编排（sing-box + sub-store + MetaCubeXD）
+    ├── docker-compose.yml          # 3 服务编排（sing-box + sub-store + proxy-ui）
     ├── .env                        # 环境变量（镜像版本、端口、路径）
     ├── configs/
     │   └── sing-box/
@@ -28,12 +28,11 @@
 部署完成后：
 
 1. 打开 http://192.168.100.135:9001 配置 sub-store
-2. 添加机场订阅，输出格式选 sing-box
-3. 保存输出文件到 /etc/sub-store/nodes.json
-4. 运行分组脚本：`sudo bash scripts/group-nodes.sh /etc/sub-store/nodes.json > /tmp/outbounds.json`
-5. 合并到 sing-box 配置：`jq -s '.[0].outbounds = .[1] | .[0]' /etc/sing-box/config.json /tmp/outbounds.json > /tmp/config-merged.json && sudo mv /tmp/config-merged.json /etc/sing-box/config.json`
-6. 重启容器：`docker restart sing-box`
-7. 打开 http://192.168.100.135:9091 使用 Web UI
+2. 添加机场订阅，并确认单条订阅可刷新成功
+3. 预览导出：`bash scripts/export-substore-singbox.sh`
+4. 验证导出：`bash scripts/test-export-substore-singbox.sh`
+5. 应用到运行配置并重启：`sudo bash scripts/export-substore-singbox.sh --apply`
+6. 打开 http://192.168.100.135:9091 使用 Web UI
 
 ### 第二阶段：TUN 模式（透明代理）
 
@@ -101,36 +100,30 @@
 7. 核心地区（香港/日本/新加坡/美国）可用节点比例 ≥ 60%
 8. SSH 在 Phase 1 期间持续可用
 9. Phase 2 前演练通过
-10. 无需 MetaCubeXD 也能通过 mixed 端口使用 HTTP/SOCKS5 代理
+10. 无需 Web UI 也能通过 mixed 端口使用 HTTP/SOCKS5 代理
 
 ## 端口分配
 
 | 端口 | 服务 | 说明 |
 |------|------|------|
 | 7890 | sing-box mixed | HTTP/SOCKS5 代理入口 |
-| 9090 | sing-box API | Clash API，供 MetaCubeXD 连接的后端接口 |
-| 9091 | MetaCubeXD | Web UI（独立容器，映射容器 80 端口） |
+| 9090 | sing-box API | Clash API，供 proxy-ui 连接的后端接口 |
+| 9091 | proxy-ui | Web UI（独立容器，映射容器 80 端口） |
 | 9001 | sub-store UI | 订阅管理面板（容器 3001） |
 | 9002 | sub-store API | sub-store 后端接口（容器 3000） |
 
-MetaCubeXD 不使用 9090，因为 9090 已由 sing-box 的 Clash API 占用。MetaCubeXD 是前端 Web UI，浏览器访问 9091；它再连接 9090 读取和切换 sing-box 代理组。
+proxy-ui 不使用 9090，因为 9090 已由 sing-box 的 Clash API 占用。proxy-ui 是从零实现的前端 Web UI，浏览器访问 9091；它通过服务端代理连接 9090 读取和切换 sing-box 代理组。
 
 ## Web UI 登录与连接
 
-### MetaCubeXD
+### proxy-ui
 
-- 后端地址：`http://192.168.100.135:9090`
-- 密钥/Secret：留空（不要输入 `secret` 字样）
+- 前端地址：`http://192.168.100.135:9091`
+- 后端代理：同源 `/api`，由 proxy-ui 服务端转发到 sing-box Clash API `http://host.docker.internal:9090`
 
-当前 sing-box Clash API 未配置 `secret`，所以 MetaCubeXD 连接时不需要密码。
+当前 proxy-ui 是从零实现的独立前端，compose 会基于 `Dockerfile.proxy-ui` 构建本地镜像 `proxy-install/proxy-ui:latest`。浏览器只需要打开 `http://192.168.100.135:9091`，页面请求同源 `/api`，后端由服务端代理到 Clash API。
 
-首次打开 `http://192.168.100.135:9091` 时按下面填写：
-
-1. 后端地址填：`http://192.168.100.135:9090`
-2. 密钥输入框保持空白
-3. 点击添加/连接
-
-不要填 `http://127.0.0.1:9090`。在浏览器里，`127.0.0.1` 指的是你当前电脑，不是 Ubuntu 服务器。
+首次打开 `http://192.168.100.135:9091` 可直接使用，不需要填写后端地址、密钥，也不需要添加连接。不要在浏览器里访问或填写 `http://127.0.0.1:9090`；Clash API 只由 proxy-ui 服务端代理访问。
 
 ### sub-store
 
@@ -144,12 +137,11 @@ compose 会基于 `xream/sub-store:2.31.0-http-meta` 构建本地补丁镜像 `p
 
 ## 当前订阅状态与下一步
 
-你已经在 sub-store 配置了 4 个机场，下一步是导出节点并生成 sing-box 分组：
+你已经在 sub-store 配置了 4 个机场，下一步是自动导出节点并生成 sing-box 分组：
 
 1. 在 sub-store 中确认 4 个“单条订阅”都能刷新成功。
-2. 创建一个“组合订阅”，把 4 个机场都加入进去。
-3. 从组合订阅导出 sing-box 格式节点 JSON。
-4. 运行 `scripts/group-nodes.sh` 生成三层分组 outbounds。
-5. 合并 outbounds 到 `/etc/sing-box/config.json` 并重启 `sing-box`。
+2. 运行 `bash scripts/export-substore-singbox.sh`，默认输出到 `generated/substore-singbox/`。
+3. 运行 `bash scripts/test-export-substore-singbox.sh` 验证 JSON 结构、三层分组和真实节点数。
+4. 确认可应用后运行 `sudo bash scripts/export-substore-singbox.sh --apply`，写入 `/etc/sing-box/config.json` 并重启 `sing-box`。
 
 如果某个机场显示 `NetworkError`，说明该机场订阅链接当前从服务器侧无法访问；先不要把它作为验收通过节点来源。

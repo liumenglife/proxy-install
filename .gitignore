@@ -1,1 +1,4 @@
 .worktree/
+*.swp
+opencode-img/
+generated/

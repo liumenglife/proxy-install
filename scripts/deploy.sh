@@ -111,7 +111,7 @@ pull_images_attempt() {
         echo -e "${RED}无法进入目录: $BASE_DIR${NC}"
         exit 1
     fi
-    for img in "${SING_BOX_IMAGE}" "${SUB_STORE_BASE_IMAGE:-$SUB_STORE_IMAGE}" "${METACUBEXD_IMAGE}"; do
+    for img in "${SING_BOX_IMAGE}" "${SUB_STORE_BASE_IMAGE:-$SUB_STORE_IMAGE}"; do
         echo "  拉取 $img ..."
         if docker image inspect "$img" >/dev/null 2>&1; then
             echo -e "    ${GREEN}本地已存在${NC}"
@@ -166,6 +166,37 @@ pull_images() {
         echo -e "${RED}sub-store 本地镜像构建失败，终止部署${NC}"
         exit 1
     fi
+
+    echo "  构建本地 proxy-ui 镜像..."
+    if ! cd "$BASE_DIR" || ! docker compose build proxy-ui; then
+        echo -e "${RED}proxy-ui 本地镜像构建失败，终止部署${NC}"
+        exit 1
+    fi
+}
+
+cleanup_legacy_metacubexd_for_proxy_ui() {
+    local rows legacy_ids id name image ports compose_service
+
+    legacy_ids=""
+    rows="$(docker ps -a --format '{{.ID}}	{{.Names}}	{{.Image}}	{{.Ports}}')"
+    while IFS=$'\t' read -r id name image ports; do
+        [ -n "$id" ] || continue
+        compose_service="$(docker inspect --format '{{ index .Config.Labels "com.docker.compose.service" }}' "$id" 2>/dev/null || true)"
+        if [ "$compose_service" = "proxy-ui" ]; then
+            continue
+        fi
+        if [[ "$ports" == *9091* ]] && { [ "$name" = "metacubexd" ] || [[ "$name $image" == *metacubexd* ]]; }; then
+            legacy_ids="$legacy_ids $id"
+        fi
+    done <<< "$rows"
+
+    [ -n "${legacy_ids// /}" ] || return 0
+
+    echo "检测到旧 metacubexd 容器会与 proxy-ui 的 9091 端口冲突，正在清理..."
+    for id in $legacy_ids; do
+        docker stop "$id" >/dev/null 2>&1 || true
+        docker rm "$id" >/dev/null 2>&1 || true
+    done
 }
 
 phase1() {
@@ -191,6 +222,7 @@ phase1() {
 
     # 4. 启动容器
     echo "[4] 启动容器..."
+    cleanup_legacy_metacubexd_for_proxy_ui
     if ! cd "$BASE_DIR" || ! docker compose up -d; then
         echo -e "${RED}容器启动失败，终止部署${NC}"
         exit 1
@@ -198,7 +230,7 @@ phase1() {
 
     # 5. 等待容器就绪
     echo "[5] 等待容器就绪..."
-    for name in sing-box sub-store metacubexd; do
+    for name in sing-box sub-store proxy-ui; do
         for i in $(seq 1 10); do
             if docker ps --format '{{.Names}}' | grep -q "$name"; then
                 echo -e "  ${GREEN}$name 运行中${NC}"
