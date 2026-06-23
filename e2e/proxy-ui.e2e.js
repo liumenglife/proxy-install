@@ -42,9 +42,9 @@ function latestHistoryRank(proxy) {
 
 function latestHistoryStatus(proxy) {
   const latest = proxy?.history?.at(-1);
-  if (!latest) return 'unknown';
+  if (!latest) return 'timeout';
   if (latest.delay === 0 || latest.failed || latest.error) return 'timeout';
-  if (typeof latest.delay !== 'number') return 'unknown';
+  if (typeof latest.delay !== 'number') return 'timeout';
   if (latest.delay < 500) return 'excellent';
   if (latest.delay < 1000) return 'good';
   if (latest.delay < 2000) return 'warning';
@@ -124,7 +124,8 @@ test('独立代理 UI 显示顶部控制、只读路由和自动组列表', asyn
   const availableCount = expectedNodes.filter((node) => ['excellent', 'good', 'warning', 'poor'].includes(node.status)).length;
   const manualGroupDom = page.getByTestId(`manual-group-${manualGroup.name}`);
 
-  await expect(manualGroupDom.locator('summary')).toContainText(`可用节点数：${availableCount}/${manualGroup.all.length}`);
+  await expect(manualGroupDom.locator('.availability-metric')).toContainText(String(availableCount));
+  await expect(manualGroupDom.locator('.availability-metric')).toContainText(String(manualGroup.all.length));
   const renderedNodes = await manualGroupDom
     .locator('.nodes .node-card')
     .evaluateAll((nodes) => nodes.map((node) => ({
@@ -136,8 +137,8 @@ test('独立代理 UI 显示顶部控制、只读路由和自动组列表', asyn
   expect(renderedNodes.map((node) => node.name)).toEqual(expectedNodes.map((node) => node.name));
   expect(renderedNodes.map((node) => node.status)).toEqual(expectedNodes.map((node) => node.status));
   expect(renderedNodes.every((node) => node.hasStatusClass)).toBeTruthy();
-  // 新 chip 结构：text 为 "延时：Xms -- 节点名" 格式
-  expect(renderedNodes.every((node) => node.text.includes('延时'))).toBeTruthy();
+  // 新 chip 结构：text 为 "节点名197ms" 格式，含 ms 或 timeout
+  expect(renderedNodes.every((node) => /\d+ms|timeout/.test(node.text))).toBeTruthy();
 
   const selectedNode = expectedNodes[0].name;
   await manualGroupDom.getByTestId(`manual-node-${manualGroup.name}-${selectedNode}`).click();
@@ -285,7 +286,7 @@ test('自动刷新后保留已展开手动组和页面滚动位置', async ({ pa
 
   await page.goto(`${frontendUrl}?_pw=${Date.now()}`, { waitUntil: 'networkidle' });
   const manualGroup = page.getByTestId(`manual-group-${manualGroupName}`);
-  await manualGroup.locator('.summary-group-name').click();
+  await manualGroup.locator('.availability-metric').click();
   await expect(manualGroup).toHaveAttribute('open', '');
 
   await page.evaluate(() => window.scrollTo(0, Math.floor(document.body.scrollHeight / 2)));
@@ -392,6 +393,58 @@ test('重启按钮 UI 存在（功能测试跳过，无 Docker socket）', async
   await expect(restartBtn).toHaveText(/重启/);
 });
 
+test('顶部控件、模式横幅、路由轨道和手动区域标题正确渲染', async ({ page }) => {
+  await page.goto(`${frontendUrl}?_pw=${Date.now()}`, { waitUntil: 'networkidle' });
+
+  await expect(page.getByTestId('test-all-delay')).toBeVisible();
+  await expect(page.getByTestId('test-all-delay')).toHaveText('全部测速');
+  await expect(page.getByTestId('expand-toggle')).toBeVisible();
+  await expect(page.getByTestId('expand-toggle')).toHaveText('全部展开');
+  await expect(page.getByTestId('locate-current-node')).toHaveCount(0);
+
+  await expect(page.getByTestId('mode-banner')).toBeVisible();
+  await expect(page.getByTestId('mode-banner')).toContainText(/当前模式/);
+  await expect(page.getByTestId('route-track')).toBeVisible();
+  await expect(page.getByTestId('route-segment-selector')).toBeVisible();
+  await expect(page.getByTestId('route-segment-node')).toBeVisible();
+
+  await expect(page.locator('.section-heading').first()).toBeVisible();
+  const sectionTexts = await page.locator('.section-heading').evaluateAll(
+    (headings) => headings.map((h) => h.textContent),
+  );
+  expect(sectionTexts).toContain('全部聚合');
+  expect(sectionTexts).toContain('按机场');
+  expect(sectionTexts).toContain('按地区');
+
+  await expect(page.getByText('手动代理选择区域')).toBeVisible();
+
+  const summaryActions = page.locator('.summary-actions').first();
+  await expect(summaryActions).toBeVisible();
+  await expect(summaryActions).toContainText('定位📌');
+
+  const nodeCards = page.locator('.node-card');
+  const nodeCardCount = await nodeCards.count();
+  if (nodeCardCount > 0) {
+    await expect(nodeCards.first()).not.toContainText(/速度/);
+  }
+});
+
+test('快捷键 Meta+K 全部展开、Meta+L 全部收起', async ({ page }) => {
+  await page.goto(`${frontendUrl}?_pw=${Date.now()}`, { waitUntil: 'networkidle' });
+
+  const expandBtn = page.getByTestId('expand-toggle');
+  await expect(expandBtn).toHaveText('全部展开');
+
+  await page.keyboard.press('Meta+K');
+  await page.waitForTimeout(300);
+  await expect(page.locator('details.manual-group[open]').first()).toBeVisible();
+  await expect(expandBtn).toHaveText('全部收起');
+
+  await page.keyboard.press('Meta+L');
+  await page.waitForTimeout(300);
+  await expect(expandBtn).toHaveText('全部展开');
+});
+
 test('快速连续点击节点时自动刷新不打断交互，页面保持一致状态', async ({ page }) => {
   const manualGroupName = '按地区/日本/手动组';
   const firstNode = '日本节点A';
@@ -443,7 +496,7 @@ test('快速连续点击节点时自动刷新不打断交互，页面保持一�
   await page.goto(`${frontendUrl}?_pw=${Date.now()}`, { waitUntil: 'networkidle' });
 
   const manualGroup = page.getByTestId(`manual-group-${manualGroupName}`);
-  await manualGroup.locator('.summary-group-name').click();
+  await manualGroup.locator('.availability-metric').click();
   await expect(manualGroup).toHaveAttribute('open', '');
 
   for (let i = 0; i < 5; i++) {

@@ -4,6 +4,40 @@ const selectorName = '代理选择标签';
 
 export const readonlyAutomaticNodeMessage = '自动组不可手动选择，请去对应手动组选择';
 
+const regionFlags = new Map([
+  ['香港', '🇭🇰'], ['澳门', '🇲🇴'], ['新加坡', '🇸🇬'], ['美国', '🇺🇸'],
+  ['日本', '🇯🇵'], ['台湾', '🇹🇼'], ['英国', '🇬🇧'], ['法国', '🇫🇷'],
+  ['德国', '🇩🇪'], ['加拿大', '🇨🇦'], ['澳大利亚', '🇦🇺'], ['泰国', '🇹🇭'],
+  ['菲律宾', '🇵🇭'], ['马来西亚', '🇲🇾'], ['印尼', '🇮🇩'], ['越南', '🇻🇳'],
+  ['印度', '🇮🇳'], ['土耳其', '🇹🇷'], ['俄罗斯', '🇷🇺'], ['荷兰', '🇳🇱'],
+  ['巴西', '🇧🇷'], ['乌克兰', '🇺🇦'], ['沙特', '🇸🇦'], ['卡塔尔', '🇶🇦'],
+]);
+
+export function regionFlag(regionName) {
+  return regionFlags.get(regionName) || '📍';
+}
+
+export function regionBadgeLabel(regionName) {
+  return `${regionFlag(regionName)} ${regionName}`;
+}
+
+export function formatSelectorSegment(selector) {
+  return (selector || '未选择').split('/').filter(Boolean).join(' / ');
+}
+
+export function parseRouteSegments(selector, nodeName) {
+  const selectorText = formatSelectorSegment(selector);
+  const parts = String(nodeName || '').split('-');
+  if (parts.length < 3) return { selector: selectorText, provider: '', node: nodeName || '未选择', fallback: true };
+  const [region, airport, ...nodeParts] = parts;
+  return {
+    selector: selectorText,
+    provider: `${regionFlag(region)} ${region} · ${airport}`,
+    node: nodeParts.join('-'),
+    fallback: false,
+  };
+}
+
 export function displayGroupName(groupName) {
   const match = groupName.match(/^按机场\/(.+)\/手动组$/);
   if (match) return match[1];
@@ -70,6 +104,13 @@ function displaySectionTitle(groupName) {
   return groupName.split('/')[0] || groupName;
 }
 
+function sectionIcon(title) {
+  if (title === '全部聚合') return '🔗 全部聚合';
+  if (title === '按机场') return '🛫 按机场';
+  if (title === '按地区') return '🌐 按地区';
+  return title;
+}
+
 function orderIndex(values, value) {
   const index = values.indexOf(value);
   return index === -1 ? values.length : index;
@@ -97,9 +138,23 @@ function compareScope(left, right) {
   return left.name.localeCompare(right.name, 'zh-Hans-CN');
 }
 
+export function expandToggleLabel(openCount, totalCount) {
+  return totalCount > 0 && openCount === totalCount ? '全部收起' : '全部展开';
+}
+
+export function expandShortcutAction(event) {
+  const tagName = event.target?.tagName;
+  if (['INPUT', 'TEXTAREA', 'SELECT'].includes(tagName)) return 'ignore';
+  if (!event.metaKey) return 'ignore';
+  const key = String(event.key || '').toLowerCase();
+  if (key === 'k') return 'expand';
+  if (key === 'l') return 'collapse';
+  return 'ignore';
+}
+
 export function statusFromDelay(delayMs, failed = false) {
   if (failed) return 'timeout';
-  if (typeof delayMs !== 'number') return 'unknown';
+  if (typeof delayMs !== 'number' || Number.isNaN(delayMs)) return 'timeout';
   if (delayMs < 500) return 'excellent';
   if (delayMs < 1000) return 'good';
   if (delayMs < 2000) return 'warning';
@@ -107,7 +162,7 @@ export function statusFromDelay(delayMs, failed = false) {
 }
 
 function normalizeDelayEntry(entry) {
-  if (!entry) return { status: 'unknown' };
+  if (!entry) return { status: 'timeout' };
   const status = entry.status || statusFromDelay(entry.delayMs, entry.failed || entry.error);
   if (status === 'timeout' || status === 'error') return { status: 'timeout' };
   if (typeof entry.delayMs === 'number') return { delayMs: entry.delayMs, status };
@@ -116,11 +171,11 @@ function normalizeDelayEntry(entry) {
 
 function delayFromHistory(history) {
   const latest = history?.at(-1);
-  if (!latest) return undefined;
+  if (!latest) return { status: 'timeout' };
   const delayMs = typeof latest.delayMs === 'number' ? latest.delayMs : latest.delay;
   if (delayMs === 0 || latest.failed || latest.error) return { status: 'timeout' };
   if (typeof delayMs === 'number') return { delayMs, status: statusFromDelay(delayMs) };
-  return undefined;
+  return { status: 'timeout' };
 }
 
 function buildDelayCache(proxies, optionDelayCache) {
@@ -155,13 +210,15 @@ function sortNodesByDelay(nodeNames, delayCache) {
     }));
 }
 
-function buildManualGroup(proxy, parsed, delayCache) {
+function buildManualGroup(proxy, parsed, delayCache, currentManualGroup) {
   const nodes = sortNodesByDelay(proxy.all || [], delayCache);
   const currentNodeDelay = normalizeDelayEntry(delayCache.get(proxy.now));
+  const activeNodeName = parsed.proxy.name === currentManualGroup ? proxy.now || '' : '';
   return {
     ...proxy,
     scopeName: parsed.scopeName,
     sectionTitle: parsed.sectionTitle,
+    activeNodeName,
     nodes,
     availableCount: nodes.filter((node) => availableDelayStatuses.has(node.delayStatus)).length,
     totalCount: nodes.length,
@@ -171,14 +228,14 @@ function buildManualGroup(proxy, parsed, delayCache) {
   };
 }
 
-function buildManualSections(groups, delayCache) {
+function buildManualSections(groups, delayCache, currentManualGroup) {
   const parsedGroups = groups
     .filter((proxy) => proxy.type === 'Selector' && proxy.name.endsWith('/手动组'))
     .map((proxy) => ({ ...parseScopedGroupName(proxy.name, '手动组'), proxy, name: proxy.name }))
     .sort(compareScope);
   const sections = ['全部聚合', '按机场', '按地区', '未分类'].map((title) => ({ title, groups: [] }));
   for (const parsed of parsedGroups) {
-    sections.find((section) => section.title === parsed.sectionTitle).groups.push(buildManualGroup(parsed.proxy, parsed, delayCache));
+    sections.find((section) => section.title === parsed.sectionTitle).groups.push(buildManualGroup(parsed.proxy, parsed, delayCache, currentManualGroup));
   }
   return sections;
 }
@@ -222,6 +279,20 @@ export function buildProxyUiModel(proxies, options = {}) {
 
   const automaticSelectorOptions = buildAutomaticSelectorOptions(groups);
 
+  const isAutomaticMode = selector.now.endsWith('/自动组');
+  const isManualMode = selector.now.endsWith('/手动组');
+  const mode = {
+    type: isAutomaticMode ? 'automatic' : isManualMode ? 'manual' : selector.now === 'direct' ? 'direct' : 'unknown',
+    label: isAutomaticMode
+      ? '当前模式：自动组'
+      : isManualMode
+        ? `当前模式：手动组 · ${formatSelectorSegment(selector.now)}`
+        : selector.now === 'direct'
+          ? '当前模式：直连'
+          : '当前模式：未选择',
+  };
+  const routeSegments = parseRouteSegments(selector.now, routeTarget);
+
   return {
     automaticGroups,
     automaticSections: automaticSelectorOptions.map((option) => ({
@@ -230,8 +301,10 @@ export function buildProxyUiModel(proxies, options = {}) {
     })),
     automaticSelectorOptions,
     currentManualGroup,
-    manualSections: buildManualSections(groups, delayCache),
+    manualSections: buildManualSections(groups, delayCache, currentManualGroup),
+    mode,
     routeLabel: `${selector.now || '未选择'} → ${routeTarget}`,
+    routeSegments,
     sections: [...sectionMap].map(([title, items]) => ({ title, items })),
     selectedAutomaticGroup,
     selectorNow: selector.now || '',
@@ -322,6 +395,43 @@ export function createApi(baseUrl = '/api') {
 function setText(id, text) {
   const element = document.getElementById(id);
   if (element) element.textContent = text;
+}
+
+function renderModeBanner(container, mode) {
+  if (!container) return;
+  container.className = `mode-banner mode-${mode.type}`;
+  const iconMap = { automatic: '🤖', manual: '🎯', direct: '⚡', unknown: '❓' };
+  container.textContent = `${iconMap[mode.type] || '❓'} ${mode.label}`;
+}
+
+function renderRouteTrack(container, segments) {
+  if (!container) return;
+  container.replaceChildren();
+  const chipData = [
+    { testid: 'route-segment-selector', text: segments.selector },
+    { testid: 'route-segment-provider', text: segments.provider },
+    { testid: 'route-segment-node', text: segments.node || '未选择' },
+  ];
+  for (let i = 0; i < chipData.length; i++) {
+    const chip = document.createElement('span');
+    chip.className = 'route-chip';
+    chip.setAttribute('data-testid', chipData[i].testid);
+    chip.textContent = chipData[i].text;
+    container.append(chip);
+    if (i < chipData.length - 1) {
+      const arrow = document.createElement('span');
+      arrow.className = 'route-arrow';
+      arrow.textContent = '→';
+      container.append(arrow);
+    }
+  }
+}
+
+function updateExpandToggleLabel() {
+  const details = [...document.querySelectorAll('details.manual-group')];
+  const openCount = details.filter((item) => item.open).length;
+  const btn = document.getElementById('expand-toggle-btn');
+  if (btn) btn.textContent = expandToggleLabel(openCount, details.length);
 }
 
 function syncTimeLabel(timestamp) {
@@ -437,40 +547,87 @@ export function createRefreshScheduler({ state, syncProxies, intervalMs = 3000, 
   };
 }
 
-function delayLabel(node) {
-  if (typeof node.delayMs === 'number') return `延时：${node.delayMs}ms`;
-  if (node.delayStatus === 'timeout') return '延时：timeout';
-  return '延时：--';
+function delayValueLabel(node) {
+  if (typeof node.delayMs === 'number') return `${node.delayMs}ms`;
+  return 'timeout';
 }
 
-function speedLabel(node) {
-  if (typeof node.delayMs === 'number') return node.delayStatus;
-  return 'unknown';
+function summaryDelayText(group) {
+  if (typeof group.currentNodeDelay?.delayMs === 'number') return `${group.currentNodeDelay.delayMs}ms`;
+  return 'timeout';
 }
 
-function groupCardSummary(group) {
-  const parts = [];
-  if (typeof group.currentNodeDelay?.delayMs === 'number') {
-    parts.push(`延时：${group.currentNodeDelay.delayMs}ms`);
-  } else if (group.currentNodeDelay?.status === 'timeout') {
-    parts.push('延时：timeout');
+function buildGroupSummaryElements(doc, group) {
+  const summaryRow = doc.createElement('span');
+  summaryRow.className = 'summary-row';
+
+  const leftSpan = doc.createElement('span');
+  if (group.sectionTitle === '按地区') {
+    leftSpan.className = 'region-badge';
+    leftSpan.textContent = regionBadgeLabel(group.scopeName);
+  } else if (group.sectionTitle === '按机场') {
+    leftSpan.className = 'airport-label';
+    leftSpan.textContent = group.scopeName;
   } else {
-    parts.push('延时：--');
+    leftSpan.className = 'aggregate-label';
+    leftSpan.textContent = '全部节点';
   }
-  const speed = group.currentNodeSpeed || '--';
-  parts.push(`速度：${typeof speed === 'number' ? speed : speed}`);
-  return parts.join('，');
+
+  const healthMetrics = doc.createElement('span');
+  healthMetrics.className = 'health-metrics';
+
+  const availabilityMetric = doc.createElement('span');
+  availabilityMetric.className = 'availability-metric';
+  const availStrong = doc.createElement('strong');
+  availStrong.textContent = String(group.availableCount);
+  availabilityMetric.append(availStrong, doc.createTextNode(` / ${group.totalCount}`));
+
+  const delayMetric = doc.createElement('span');
+  delayMetric.className = 'delay-metric';
+  delayMetric.textContent = summaryDelayText(group);
+
+  healthMetrics.append(availabilityMetric, delayMetric);
+
+  const summaryNodeSpan = doc.createElement('span');
+  summaryNodeSpan.className = 'summary-node-name';
+  summaryNodeSpan.textContent = group.activeNodeName || '未选中节点';
+
+  const summaryActions = doc.createElement('span');
+  summaryActions.className = 'summary-actions';
+
+  const groupSpeedBtn = doc.createElement('button');
+  groupSpeedBtn.type = 'button';
+  groupSpeedBtn.className = 'group-speedtest-btn';
+  groupSpeedBtn.textContent = '测速';
+  groupSpeedBtn.setAttribute('data-testid', `group-speedtest-${group.name}`);
+
+  const locateBtn = doc.createElement('button');
+  locateBtn.type = 'button';
+  locateBtn.className = 'group-locate-btn';
+  locateBtn.textContent = '定位📌';
+  locateBtn.setAttribute('data-testid', `group-locate-${group.name}`);
+
+  summaryActions.append(groupSpeedBtn, locateBtn);
+  summaryRow.append(leftSpan, healthMetrics, summaryNodeSpan, summaryActions);
+
+  return { summaryRow, groupSpeedBtn, locateBtn };
 }
 
 export function renderProxyGroups(container, model, docOverride) {
   const doc = docOverride || document;
   const sections = container;
 
+  const manualHeading = doc.createElement('h2');
+  manualHeading.className = 'section-heading';
+  manualHeading.textContent = '手动代理选择区域';
+  sections.append(manualHeading);
+
   for (const section of model.manualSections) {
     const sectionEl = doc.createElement('section');
     sectionEl.className = 'card';
     const heading = doc.createElement('h2');
-    heading.textContent = section.title;
+    heading.className = 'section-heading';
+    heading.textContent = sectionIcon(section.title);
     sectionEl.append(heading);
 
     for (const group of section.groups) {
@@ -479,34 +636,15 @@ export function renderProxyGroups(container, model, docOverride) {
       details.dataset.groupName = group.name;
       details.setAttribute('data-testid', 'manual-group-card');
       const summary = doc.createElement('summary');
-      const summaryRow = doc.createElement('span');
-      summaryRow.className = 'summary-row';
-
-      const displayName = displayGroupName(group.name);
-      const nameSpan = doc.createElement('span');
-      nameSpan.className = 'summary-group-name';
-      nameSpan.textContent = displayName;
-
-      const statsSpan = doc.createElement('span');
-      statsSpan.className = 'summary-stats';
-      statsSpan.textContent = `可用节点数：${group.availableCount}/${group.totalCount}`;
-
-      const nowSpan = doc.createElement('span');
-      nowSpan.className = 'summary-now';
-      nowSpan.textContent = `当前：${group.now || '未选择'}`;
-
-      const delaySpan = doc.createElement('span');
-      delaySpan.className = 'summary-delay';
-      delaySpan.textContent = groupCardSummary(group);
-
-      summaryRow.append(nameSpan, statsSpan, nowSpan, delaySpan);
+      const { summaryRow } = buildGroupSummaryElements(doc, group);
       summary.append(summaryRow);
       details.append(summary);
 
       const nodesEl = doc.createElement('div');
       nodesEl.className = 'nodes';
       for (const node of group.nodes || []) {
-        const card = buildNodeCard(doc, node, node.name === group.now);
+        const active = node.name === (group.activeNodeName || '');
+        const card = buildNodeCard(doc, node, active);
         nodesEl.append(card);
       }
       details.append(nodesEl);
@@ -526,19 +664,15 @@ function buildNodeCard(doc, node, active) {
   card.setAttribute('data-delay-status', node.delayStatus);
   card.setAttribute('data-testid', 'node-row');
 
-  const delayChip = doc.createElement('span');
-  delayChip.className = `chip delay-${node.delayStatus}`;
-  delayChip.textContent = delayLabel(node);
+  const nameSpan = doc.createElement('span');
+  nameSpan.className = 'node-name';
+  nameSpan.textContent = node.name;
 
-  const speedChip = doc.createElement('span');
-  speedChip.className = `chip speed-${speedLabel(node)}`;
-  speedChip.textContent = '--';
+  const delayBadge = doc.createElement('span');
+  delayBadge.className = `node-delay-badge delay-${node.delayStatus}`;
+  delayBadge.textContent = delayValueLabel(node);
 
-  const nameChip = doc.createElement('span');
-  nameChip.className = 'chip node-name';
-  nameChip.textContent = node.name;
-
-  card.append(delayChip, speedChip, nameChip);
+  card.append(nameSpan, delayBadge);
   return card;
 }
 
@@ -553,19 +687,15 @@ function nodeButton(groupName, node, active, onClick) {
   card.dataset.testid = `manual-node-${groupName}-${node.name}`;
   card.addEventListener('click', onClick);
 
-  const delayChip = document.createElement('span');
-  delayChip.className = `chip delay-${node.delayStatus}`;
-  delayChip.textContent = delayLabel(node);
+  const nameSpan = document.createElement('span');
+  nameSpan.className = 'node-name';
+  nameSpan.textContent = node.name;
 
-  const speedChip = document.createElement('span');
-  speedChip.className = `chip speed-${speedLabel(node)}`;
-  speedChip.textContent = '--';
+  const delayBadge = document.createElement('span');
+  delayBadge.className = `node-delay-badge delay-${node.delayStatus}`;
+  delayBadge.textContent = delayValueLabel(node);
 
-  const nameChip = document.createElement('span');
-  nameChip.className = 'chip node-name';
-  nameChip.textContent = node.name;
-
-  card.append(delayChip, speedChip, nameChip);
+  card.append(nameSpan, delayBadge);
   return card;
 }
 
@@ -576,7 +706,7 @@ function automaticNodeButton(groupName, nodeName, onClick) {
   card.addEventListener('click', onClick);
 
   const nameChip = document.createElement('span');
-  nameChip.className = 'chip node-name';
+  nameChip.className = 'node-name';
   nameChip.textContent = nodeName;
 
   card.append(nameChip);
@@ -607,6 +737,9 @@ async function render(api, state = {}, interactionTracker) {
 
   updateProxyToggleUI(model.selectorNow !== 'direct');
 
+  renderModeBanner(document.getElementById('mode-banner'), model.mode);
+  renderRouteTrack(document.getElementById('route-track'), model.routeSegments);
+
   const select = document.getElementById('auto-group-select');
   select.replaceChildren();
   if (!model.selectedAutomaticGroup) {
@@ -625,11 +758,18 @@ async function render(api, state = {}, interactionTracker) {
 
   const sections = document.getElementById('sections');
   sections.replaceChildren();
+
+  const manualHeading = document.createElement('h2');
+  manualHeading.className = 'section-heading';
+  manualHeading.textContent = '手动代理选择区域';
+  sections.append(manualHeading);
+
   for (const section of model.manualSections) {
     const sectionEl = document.createElement('section');
     sectionEl.className = 'card';
     const heading = document.createElement('h2');
-    heading.textContent = section.title;
+    heading.className = 'section-heading';
+    heading.textContent = sectionIcon(section.title);
     sectionEl.append(heading);
 
     for (const group of section.groups) {
@@ -640,31 +780,7 @@ async function render(api, state = {}, interactionTracker) {
       if (expandedGroups.has(group.name)) details.open = true;
 
       const summary = document.createElement('summary');
-      const summaryRow = document.createElement('span');
-      summaryRow.className = 'summary-row';
-
-      const displayName = displayGroupName(group.name);
-      const nameSpan = document.createElement('span');
-      nameSpan.className = 'summary-group-name';
-      nameSpan.textContent = displayName;
-
-      const statsSpan = document.createElement('span');
-      statsSpan.className = 'summary-stats';
-      statsSpan.textContent = `可用节点数：${group.availableCount}/${group.totalCount}`;
-
-      const nowSpan = document.createElement('span');
-      nowSpan.className = 'summary-now';
-      nowSpan.textContent = `当前：${group.now || '未选择'}`;
-
-      const delaySpan = document.createElement('span');
-      delaySpan.className = 'summary-delay';
-      delaySpan.textContent = groupCardSummary(group);
-
-      const groupSpeedBtn = document.createElement('button');
-      groupSpeedBtn.type = 'button';
-      groupSpeedBtn.className = 'group-speedtest-btn';
-      groupSpeedBtn.textContent = '测速';
-      groupSpeedBtn.setAttribute('data-testid', `group-speedtest-${group.name}`);
+      const { summaryRow, groupSpeedBtn, locateBtn } = buildGroupSummaryElements(document, group);
       groupSpeedBtn.addEventListener('click', async (e) => {
         e.preventDefault();
         e.stopPropagation();
@@ -688,8 +804,21 @@ async function render(api, state = {}, interactionTracker) {
           interactionTracker.endInteraction();
         }
       });
-
-      summaryRow.append(nameSpan, statsSpan, nowSpan, delaySpan, groupSpeedBtn);
+      locateBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const activeNode = group.activeNodeName;
+        if (activeNode && activeNode.trim()) {
+          const nodeCard = document.querySelector(`button.node-card[data-node-name="${activeNode}"]`);
+          if (nodeCard) {
+            details.open = true;
+            nodeCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            nodeCard.focus({ preventScroll: true });
+          }
+        } else {
+          setText('status', '当前分组未选中节点');
+        }
+      });
       summary.append(summaryRow);
       details.append(summary);
 
@@ -697,13 +826,14 @@ async function render(api, state = {}, interactionTracker) {
       nodes.className = 'nodes';
       for (const node of group.nodes || []) {
         nodes.append(
-          nodeButton(group.name, node, node.name === group.now, async () => {
+          nodeButton(group.name, node, node.name === (group.activeNodeName || ''), async () => {
             await selectManualNode(api, group.name, node.name);
             await render(api, state, interactionTracker);
           }),
         );
       }
       details.append(nodes);
+      details.addEventListener('toggle', () => updateExpandToggleLabel());
       sectionEl.append(details);
     }
     sections.append(sectionEl);
@@ -716,6 +846,7 @@ async function render(api, state = {}, interactionTracker) {
   state.syncError = '';
   state.lastSyncedAt = Date.now();
   updateSyncStatus(state);
+  if (typeof document !== 'undefined') updateExpandToggleLabel();
 }
 
 export function startProxyUi(api = createApi()) {
@@ -752,17 +883,19 @@ export function startProxyUi(api = createApi()) {
   });
   document.getElementById('refresh').addEventListener('click', () => scheduler.syncNow().then(() => updateSyncStatus(state)));
 
-  document.getElementById('expand-all-btn').addEventListener('click', () => {
+  function setAllGroupsOpen(open) {
     for (const details of document.querySelectorAll('details.manual-group')) {
-      details.open = true;
-      state.expandedGroups.add(details.dataset.groupName);
+      details.open = open;
+      if (open) state.expandedGroups.add(details.dataset.groupName);
     }
-  });
-  document.getElementById('collapse-all-btn').addEventListener('click', () => {
-    for (const details of document.querySelectorAll('details.manual-group')) {
-      details.open = false;
-    }
-    state.expandedGroups.clear();
+    if (!open) state.expandedGroups.clear();
+    updateExpandToggleLabel();
+  }
+
+  document.getElementById('expand-toggle-btn').addEventListener('click', () => {
+    const details = [...document.querySelectorAll('details.manual-group')];
+    const shouldExpand = details.some((item) => !item.open);
+    setAllGroupsOpen(shouldExpand);
   });
 
   document.getElementById('test-all-btn').addEventListener('click', async () => {
@@ -840,20 +973,12 @@ export function startProxyUi(api = createApi()) {
     }
   });
 
-  document.getElementById('locate-current-btn').addEventListener('click', () => {
-    const currentManual = state.currentModel?.currentManualGroup;
-    if (!currentManual) {
-      document.getElementById('status').textContent = '当前在自动组，无法定位';
-      return;
-    }
-    const currentGroup = [...document.querySelectorAll('details.manual-group')].find(
-      (details) => details.dataset.groupName === currentManual,
-    );
-    if (currentGroup) {
-      currentGroup.open = true;
-      currentGroup.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      state.expandedGroups.add(currentGroup.dataset.groupName);
-    }
+  document.addEventListener('keydown', (event) => {
+    const action = expandShortcutAction(event);
+    if (action === 'ignore') return;
+    event.preventDefault();
+    setAllGroupsOpen(action === 'expand');
+    setText('status', action === 'expand' ? '已展开全部节点' : '已收起全部节点');
   });
 
   scheduler.syncNow().catch((error) => {
