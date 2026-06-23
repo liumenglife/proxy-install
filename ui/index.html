@@ -18,7 +18,12 @@
             <span id="proxy-state-label" data-testid="proxy-state-label" class="hint" style="min-height:0;margin:0;">代理状态：检查中...</span>
           </div>
         </div>
-        <button id="refresh" data-testid="sync-now" type="button">立即同步</button>
+        <div class="hero-actions" aria-label="顶部操作">
+          <button id="refresh" data-testid="sync-now" type="button">立即同步</button>
+          <button id="test-all-btn" data-testid="test-all-delay" type="button">全部测速</button>
+          <button id="expand-toggle-btn" data-testid="expand-toggle" type="button">全部展开</button>
+          <span id="speedtest-progress" class="speedtest-progress"></span>
+        </div>
       </header>
 
       <section class="top-grid" data-testid="top-status-bar" aria-label="顶部控制区">
@@ -38,14 +43,6 @@
           </div>
         </div>
       </section>
-
-      <div class="toolbar" aria-label="操作工具条">
-        <button id="test-all-btn" data-testid="test-all-delay" type="button">全部测速</button>
-        <button id="locate-current-btn" data-testid="locate-current-node" type="button">定位当前节点</button>
-        <button id="expand-all-btn" data-testid="expand-all" type="button">全部展开</button>
-        <button id="collapse-all-btn" data-testid="collapse-all" type="button">全部收起</button>
-        <span id="speedtest-progress" class="speedtest-progress"></span>
-      </div>
 
       <div id="sections" class="sections"></div>
     </main>

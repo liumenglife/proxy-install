@@ -402,17 +402,18 @@ test('交互追踪器 currentGeneration 在每次 startInteraction 时递增', (
 // Task 3：DOM 结构、操作工具条与非阻断自动组提示
 // ============================================================
 
-test('HTML 页面不包含 SING-BOX CLASH API 且暴露工具条按钮和静态只读提示', async () => {
+test('HTML 页面不包含 SING-BOX CLASH API 且暴露主要操作按钮和静态只读提示', async () => {
   const html = await readFile(indexHtml, 'utf8');
 
   assert.doesNotMatch(html, /SING-BOX CLASH API/i);
   assert.match(html, /data-testid="test-all-delay"/);
-  assert.match(html, /data-testid="locate-current-node"/);
-  assert.match(html, /data-testid="expand-all"/);
-  assert.match(html, /data-testid="collapse-all"/);
+  assert.match(html, /data-testid="expand-toggle"/);
   assert.match(html, /自动组不可手动选择/);
   // 确保只读提示是静态文字，不是 alert 触发的按钮
   assert.doesNotMatch(html, /<button[^>]*readonly-auto-note/);
+  assert.doesNotMatch(html, /data-testid="expand-all"/);
+  assert.doesNotMatch(html, /data-testid="collapse-all"/);
+  assert.doesNotMatch(html, /data-testid="locate-current-node"/);
 });
 
 test('HTML 页面不包含"一级分组/手动组"重复文本且顶部标题为"代理控制台"', async () => {
@@ -1044,5 +1045,32 @@ test('只有代理选择标签指向的手动组显示选中态', () => {
   assert.equal(regionGroup.activeNodeName, '香港-猫熊机场-A');
   assert.equal(airportGroup.activeNodeName, '');
   assert.equal(aggregateGroup.activeNodeName, '');
+});
+
+// ============================================================
+// Task 2：顶部按钮重组、单一展开切换和快捷键
+// ============================================================
+
+test('页面只保留一个展开收起切换控件并移除全局定位', async () => {
+  const html = await readFile(indexHtml, 'utf8');
+  assert.match(html, /data-testid="expand-toggle"/);
+  assert.doesNotMatch(html, /data-testid="expand-all"/);
+  assert.doesNotMatch(html, /data-testid="collapse-all"/);
+  assert.doesNotMatch(html, /data-testid="locate-current-node"/);
+  assert.match(html, /data-testid="test-all-delay"/);
+});
+
+test('展开状态文案根据 details open 数量计算', () => {
+  assert.equal(proxyUi.expandToggleLabel(0, 3), '全部展开');
+  assert.equal(proxyUi.expandToggleLabel(2, 3), '全部展开');
+  assert.equal(proxyUi.expandToggleLabel(3, 3), '全部收起');
+});
+
+test('Command+K 和 Command+L 不区分大小写', () => {
+  assert.equal(proxyUi.expandShortcutAction({ metaKey: true, key: 'k', target: { tagName: 'BODY' } }), 'expand');
+  assert.equal(proxyUi.expandShortcutAction({ metaKey: true, key: 'K', target: { tagName: 'BODY' } }), 'expand');
+  assert.equal(proxyUi.expandShortcutAction({ metaKey: true, key: 'l', target: { tagName: 'BODY' } }), 'collapse');
+  assert.equal(proxyUi.expandShortcutAction({ metaKey: true, key: 'L', target: { tagName: 'BODY' } }), 'collapse');
+  assert.equal(proxyUi.expandShortcutAction({ metaKey: true, key: 'k', target: { tagName: 'SELECT' } }), 'ignore');
 });
 

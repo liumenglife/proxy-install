@@ -131,6 +131,20 @@ function compareScope(left, right) {
   return left.name.localeCompare(right.name, 'zh-Hans-CN');
 }
 
+export function expandToggleLabel(openCount, totalCount) {
+  return totalCount > 0 && openCount === totalCount ? '全部收起' : '全部展开';
+}
+
+export function expandShortcutAction(event) {
+  const tagName = event.target?.tagName;
+  if (['INPUT', 'TEXTAREA', 'SELECT'].includes(tagName)) return 'ignore';
+  if (!event.metaKey) return 'ignore';
+  const key = String(event.key || '').toLowerCase();
+  if (key === 'k') return 'expand';
+  if (key === 'l') return 'collapse';
+  return 'ignore';
+}
+
 export function statusFromDelay(delayMs, failed = false) {
   if (failed) return 'timeout';
   if (typeof delayMs !== 'number' || Number.isNaN(delayMs)) return 'timeout';
@@ -358,6 +372,13 @@ export function createApi(baseUrl = '/api') {
 function setText(id, text) {
   const element = document.getElementById(id);
   if (element) element.textContent = text;
+}
+
+function updateExpandToggleLabel() {
+  const details = [...document.querySelectorAll('details.manual-group')];
+  const openCount = details.filter((item) => item.open).length;
+  const btn = document.getElementById('expand-toggle-btn');
+  if (btn) btn.textContent = expandToggleLabel(openCount, details.length);
 }
 
 function syncTimeLabel(timestamp) {
@@ -740,6 +761,7 @@ async function render(api, state = {}, interactionTracker) {
         );
       }
       details.append(nodes);
+      details.addEventListener('toggle', () => updateExpandToggleLabel());
       sectionEl.append(details);
     }
     sections.append(sectionEl);
@@ -752,6 +774,7 @@ async function render(api, state = {}, interactionTracker) {
   state.syncError = '';
   state.lastSyncedAt = Date.now();
   updateSyncStatus(state);
+  if (typeof document !== 'undefined') updateExpandToggleLabel();
 }
 
 export function startProxyUi(api = createApi()) {
@@ -788,17 +811,19 @@ export function startProxyUi(api = createApi()) {
   });
   document.getElementById('refresh').addEventListener('click', () => scheduler.syncNow().then(() => updateSyncStatus(state)));
 
-  document.getElementById('expand-all-btn').addEventListener('click', () => {
+  function setAllGroupsOpen(open) {
     for (const details of document.querySelectorAll('details.manual-group')) {
-      details.open = true;
-      state.expandedGroups.add(details.dataset.groupName);
+      details.open = open;
+      if (open) state.expandedGroups.add(details.dataset.groupName);
     }
-  });
-  document.getElementById('collapse-all-btn').addEventListener('click', () => {
-    for (const details of document.querySelectorAll('details.manual-group')) {
-      details.open = false;
-    }
-    state.expandedGroups.clear();
+    if (!open) state.expandedGroups.clear();
+    updateExpandToggleLabel();
+  }
+
+  document.getElementById('expand-toggle-btn').addEventListener('click', () => {
+    const details = [...document.querySelectorAll('details.manual-group')];
+    const shouldExpand = details.some((item) => !item.open);
+    setAllGroupsOpen(shouldExpand);
   });
 
   document.getElementById('test-all-btn').addEventListener('click', async () => {
@@ -876,20 +901,12 @@ export function startProxyUi(api = createApi()) {
     }
   });
 
-  document.getElementById('locate-current-btn').addEventListener('click', () => {
-    const currentManual = state.currentModel?.currentManualGroup;
-    if (!currentManual) {
-      document.getElementById('status').textContent = '当前在自动组，无法定位';
-      return;
-    }
-    const currentGroup = [...document.querySelectorAll('details.manual-group')].find(
-      (details) => details.dataset.groupName === currentManual,
-    );
-    if (currentGroup) {
-      currentGroup.open = true;
-      currentGroup.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      state.expandedGroups.add(currentGroup.dataset.groupName);
-    }
+  document.addEventListener('keydown', (event) => {
+    const action = expandShortcutAction(event);
+    if (action === 'ignore') return;
+    event.preventDefault();
+    setAllGroupsOpen(action === 'expand');
+    setText('status', action === 'expand' ? '已展开全部节点' : '已收起全部节点');
   });
 
   scheduler.syncNow().catch((error) => {
