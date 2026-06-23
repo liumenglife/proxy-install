@@ -104,6 +104,13 @@ function displaySectionTitle(groupName) {
   return groupName.split('/')[0] || groupName;
 }
 
+function sectionIcon(title) {
+  if (title === '全部聚合') return '🔗 全部聚合';
+  if (title === '按机场') return '🛫 按机场';
+  if (title === '按地区') return '🌐 按地区';
+  return title;
+}
+
 function orderIndex(values, value) {
   const index = values.indexOf(value);
   return index === -1 ? values.length : index;
@@ -620,7 +627,7 @@ export function renderProxyGroups(container, model, docOverride) {
     sectionEl.className = 'card';
     const heading = doc.createElement('h2');
     heading.className = 'section-heading';
-    heading.textContent = section.title;
+    heading.textContent = sectionIcon(section.title);
     sectionEl.append(heading);
 
     for (const group of section.groups) {
@@ -762,7 +769,7 @@ async function render(api, state = {}, interactionTracker) {
     sectionEl.className = 'card';
     const heading = document.createElement('h2');
     heading.className = 'section-heading';
-    heading.textContent = section.title;
+    heading.textContent = sectionIcon(section.title);
     sectionEl.append(heading);
 
     for (const group of section.groups) {
