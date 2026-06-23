@@ -734,14 +734,12 @@ summary::-webkit-details-marker {
   gap: 8px;
   align-items: center;
   cursor: pointer;
-  transition: opacity 0.15s ease, transform 0.1s ease;
-  border: 1px solid transparent;
+  transition: border-color 0.15s ease, background 0.15s ease, transform 0.1s ease;
+  border: 3px solid transparent;
 }
 
 .node-card:hover {
-  opacity: 0.85;
-  border-color: rgba(255, 255, 255, 0.1);
-  background: inherit;
+  border-color: rgba(255, 255, 255, 0.18);
 }
 
 .node-card:active {
@@ -751,6 +749,14 @@ summary::-webkit-details-marker {
 button.node-card {
   font-family: inherit;
 }
+
+/* 延迟状态背景色 — 声明在 .node-card.active 之前才不会被覆盖 */
+.node-card.delay-excellent { background-color: #052e16; }
+.node-card.delay-good { background-color: #14532d; }
+.node-card.delay-warning { background-color: #422006; }
+.node-card.delay-poor { background-color: #2e1065; }
+.node-card.delay-timeout { background-color: #450a0a; }
+.node-card.delay-unknown { background-color: #1e293b; }
 
 .node-card.active {
   border: 3px solid #f59e0b;
@@ -798,14 +804,6 @@ button.node-card {
 .node-card.active .node-delay-badge.delay-warning { background: #fef9c3; color: #713f12; border-color: #facc15; }
 .node-card.active .node-delay-badge.delay-poor { background: #f3e8ff; color: #581c87; border-color: #a855f7; }
 .node-card.active .node-delay-badge.delay-timeout { background: #fee2e2; color: #7f1d1d; border-color: #ef4444; }
-
-/* 延迟状态背景色 — 替代 border-left */
-.node-card.delay-excellent { background-color: #052e16; }
-.node-card.delay-good { background-color: #14532d; }
-.node-card.delay-warning { background-color: #422006; }
-.node-card.delay-poor { background-color: #2e1065; }
-.node-card.delay-timeout { background-color: #450a0a; }
-.node-card.delay-unknown { background-color: #1e293b; }
 
 /* ---- chip 标签 ---- */
 
