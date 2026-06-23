@@ -193,6 +193,12 @@ select:focus {
   letter-spacing: 0.04em;
 }
 
+.capability-title {
+  font-size: 16px !important;
+  text-transform: none !important;
+  letter-spacing: 0.02em !important;
+}
+
 .route-panel strong {
   display: block;
   overflow-wrap: anywhere;
@@ -284,6 +290,23 @@ select:focus {
   font-size: 0.85rem;
 }
 
+.route-chip-selector {
+  font-weight: 600;
+  color: var(--accent);
+  background: rgba(59, 130, 246, 0.1);
+  border-color: rgba(59, 130, 246, 0.2);
+}
+
+.route-chip-provider {
+  color: var(--text-primary);
+}
+
+.route-chip-node {
+  font-family: monospace;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
 .route-arrow {
   font-size: 0.8rem;
   color: var(--text-muted);
@@ -308,14 +331,15 @@ select:focus {
 /* ---- 地域徽章 ---- */
 
 .region-badge {
-  padding: 0.2rem 0.6rem;
+  padding: 0.35rem 0.8rem;
   border-radius: 0.5rem;
-  font-size: 0.85rem;
+  font-size: 1rem;
+  font-weight: 600;
   display: inline-flex;
   align-items: center;
   gap: 0.25rem;
   background: rgba(255, 255, 255, 0.05);
-  border: 1px solid var(--border-light);
+  border: 1px solid rgba(255, 255, 255, 0.12);
   transition: transform 0.15s ease;
 }
 
@@ -377,6 +401,8 @@ select:focus {
 .summary-actions {
   display: flex;
   gap: 0.25rem;
+  margin-left: auto;
+  align-self: flex-end;
 }
 
 .group-locate-btn {
@@ -480,7 +506,7 @@ summary::-webkit-details-marker {
 .summary-row {
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
+  align-items: flex-end;
   gap: 10px;
 }
 

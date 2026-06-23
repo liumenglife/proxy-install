@@ -32,13 +32,11 @@
       <section class="top-grid" data-testid="top-status-bar" aria-label="顶部控制区">
         <div class="panel">
           <h2 class="section-heading">🤖 自动代理选择器</h2>
-          <label for="auto-group-select">自动组代理选择器</label>
+          <label class="capability-title" for="auto-group-select">自动组代理选择器</label>
           <select id="auto-group-select" data-testid="auto-group-select"></select>
           <p id="manual-status" class="hint"></p>
         </div>
-        <div class="panel route-panel">
-          <span>实际路由标签</span>
-          <strong id="route-label" data-testid="route-label">加载中...</strong>
+        <div class="panel">
           <p id="readonly-auto-note" class="hint" data-testid="readonly-auto-note">自动组不可手动选择，请去对应手动组选择</p>
           <p id="status" class="hint" aria-live="polite">初始化中...</p>
           <div class="proxy-toggle-bar">

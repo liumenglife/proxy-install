@@ -412,9 +412,10 @@ function renderRouteTrack(container, segments) {
     { testid: 'route-segment-provider', text: segments.provider },
     { testid: 'route-segment-node', text: segments.node || '未选择' },
   ];
+  const chipClasses = ['route-chip route-chip-selector', 'route-chip route-chip-provider', 'route-chip route-chip-node'];
   for (let i = 0; i < chipData.length; i++) {
     const chip = document.createElement('span');
-    chip.className = 'route-chip';
+    chip.className = chipClasses[i];
     chip.setAttribute('data-testid', chipData[i].testid);
     chip.textContent = chipData[i].text;
     container.append(chip);
@@ -590,7 +591,7 @@ function buildGroupSummaryElements(doc, group) {
 
   const summaryNodeSpan = doc.createElement('span');
   summaryNodeSpan.className = 'summary-node-name';
-  summaryNodeSpan.textContent = group.activeNodeName || '未选中节点';
+  summaryNodeSpan.textContent = group.activeNodeName || '';
 
   const summaryActions = doc.createElement('span');
   summaryActions.className = 'summary-actions';
@@ -732,7 +733,6 @@ async function render(api, state = {}, interactionTracker) {
   const model = buildProxyUiModel(proxies, { delayCache: state.delayCache });
   state.currentModel = model;
 
-  setText('route-label', model.routeLabel);
   setText('manual-status', model.currentManualGroup ? `当前为手动组：${model.currentManualGroup}` : '当前为自动组');
 
   updateProxyToggleUI(model.selectorNow !== 'direct');
