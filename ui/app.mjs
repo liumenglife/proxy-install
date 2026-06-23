@@ -540,29 +540,14 @@ export function createRefreshScheduler({ state, syncProxies, intervalMs = 3000, 
   };
 }
 
-function delayLabel(node) {
-  if (typeof node.delayMs === 'number') return `延时：${node.delayMs}ms`;
-  if (node.delayStatus === 'timeout') return '延时：timeout';
-  return '延时：--';
+function delayValueLabel(node) {
+  if (typeof node.delayMs === 'number') return `${node.delayMs}ms`;
+  return 'timeout';
 }
 
-function speedLabel(node) {
-  if (typeof node.delayMs === 'number') return node.delayStatus;
-  return 'unknown';
-}
-
-function groupCardSummary(group) {
-  const parts = [];
-  if (typeof group.currentNodeDelay?.delayMs === 'number') {
-    parts.push(`延时：${group.currentNodeDelay.delayMs}ms`);
-  } else if (group.currentNodeDelay?.status === 'timeout') {
-    parts.push('延时：timeout');
-  } else {
-    parts.push('延时：--');
-  }
-  const speed = group.currentNodeSpeed || '--';
-  parts.push(`速度：${typeof speed === 'number' ? speed : speed}`);
-  return parts.join('，');
+function summaryDelayText(group) {
+  if (typeof group.currentNodeDelay?.delayMs === 'number') return `${group.currentNodeDelay.delayMs}ms`;
+  return 'timeout';
 }
 
 export function renderProxyGroups(container, model, docOverride) {
@@ -573,6 +558,7 @@ export function renderProxyGroups(container, model, docOverride) {
     const sectionEl = doc.createElement('section');
     sectionEl.className = 'card';
     const heading = doc.createElement('h2');
+    heading.className = 'section-heading';
     heading.textContent = section.title;
     sectionEl.append(heading);
 
@@ -585,31 +571,61 @@ export function renderProxyGroups(container, model, docOverride) {
       const summaryRow = doc.createElement('span');
       summaryRow.className = 'summary-row';
 
-      const displayName = displayGroupName(group.name);
-      const nameSpan = doc.createElement('span');
-      nameSpan.className = 'summary-group-name';
-      nameSpan.textContent = displayName;
+      const leftSpan = doc.createElement('span');
+      if (group.sectionTitle === '按地区') {
+        leftSpan.className = 'region-badge';
+        leftSpan.textContent = regionBadgeLabel(group.scopeName);
+      } else if (group.sectionTitle === '按机场') {
+        leftSpan.className = 'airport-label';
+        leftSpan.textContent = group.scopeName;
+      } else {
+        leftSpan.className = 'aggregate-label';
+        leftSpan.textContent = '全部节点';
+      }
 
-      const statsSpan = doc.createElement('span');
-      statsSpan.className = 'summary-stats';
-      statsSpan.textContent = `可用节点数：${group.availableCount}/${group.totalCount}`;
+      const healthMetrics = doc.createElement('span');
+      healthMetrics.className = 'health-metrics';
 
-      const nowSpan = doc.createElement('span');
-      nowSpan.className = 'summary-now';
-      nowSpan.textContent = `当前：${group.now || '未选择'}`;
+      const availabilityMetric = doc.createElement('span');
+      availabilityMetric.className = 'availability-metric';
+      const availStrong = doc.createElement('strong');
+      availStrong.textContent = String(group.availableCount);
+      availabilityMetric.append(availStrong, doc.createTextNode(` / ${group.totalCount}`));
 
-      const delaySpan = doc.createElement('span');
-      delaySpan.className = 'summary-delay';
-      delaySpan.textContent = groupCardSummary(group);
+      const delayMetric = doc.createElement('span');
+      delayMetric.className = 'delay-metric';
+      delayMetric.textContent = summaryDelayText(group);
 
-      summaryRow.append(nameSpan, statsSpan, nowSpan, delaySpan);
+      healthMetrics.append(availabilityMetric, delayMetric);
+
+      const summaryNodeSpan = doc.createElement('span');
+      summaryNodeSpan.className = 'summary-node-name';
+      summaryNodeSpan.textContent = group.activeNodeName || '未选中节点';
+
+      const summaryActions = doc.createElement('span');
+      summaryActions.className = 'summary-actions';
+
+      const groupSpeedBtn = doc.createElement('button');
+      groupSpeedBtn.type = 'button';
+      groupSpeedBtn.className = 'group-speedtest-btn';
+      groupSpeedBtn.textContent = '测速';
+      groupSpeedBtn.setAttribute('data-testid', `group-speedtest-${group.name}`);
+
+      const locateBtn = doc.createElement('button');
+      locateBtn.type = 'button';
+      locateBtn.className = 'group-locate-btn';
+      locateBtn.textContent = '定位📌';
+
+      summaryActions.append(groupSpeedBtn, locateBtn);
+      summaryRow.append(leftSpan, healthMetrics, summaryNodeSpan, summaryActions);
       summary.append(summaryRow);
       details.append(summary);
 
       const nodesEl = doc.createElement('div');
       nodesEl.className = 'nodes';
       for (const node of group.nodes || []) {
-        const card = buildNodeCard(doc, node, node.name === group.now);
+        const active = node.name === (group.activeNodeName || '');
+        const card = buildNodeCard(doc, node, active);
         nodesEl.append(card);
       }
       details.append(nodesEl);
@@ -629,19 +645,15 @@ function buildNodeCard(doc, node, active) {
   card.setAttribute('data-delay-status', node.delayStatus);
   card.setAttribute('data-testid', 'node-row');
 
-  const delayChip = doc.createElement('span');
-  delayChip.className = `chip delay-${node.delayStatus}`;
-  delayChip.textContent = delayLabel(node);
+  const nameSpan = doc.createElement('span');
+  nameSpan.className = 'node-name';
+  nameSpan.textContent = node.name;
 
-  const speedChip = doc.createElement('span');
-  speedChip.className = `chip speed-${speedLabel(node)}`;
-  speedChip.textContent = '--';
+  const delayBadge = doc.createElement('span');
+  delayBadge.className = `node-delay-badge delay-${node.delayStatus}`;
+  delayBadge.textContent = delayValueLabel(node);
 
-  const nameChip = doc.createElement('span');
-  nameChip.className = 'chip node-name';
-  nameChip.textContent = node.name;
-
-  card.append(delayChip, speedChip, nameChip);
+  card.append(nameSpan, delayBadge);
   return card;
 }
 
@@ -656,19 +668,15 @@ function nodeButton(groupName, node, active, onClick) {
   card.dataset.testid = `manual-node-${groupName}-${node.name}`;
   card.addEventListener('click', onClick);
 
-  const delayChip = document.createElement('span');
-  delayChip.className = `chip delay-${node.delayStatus}`;
-  delayChip.textContent = delayLabel(node);
+  const nameSpan = document.createElement('span');
+  nameSpan.className = 'node-name';
+  nameSpan.textContent = node.name;
 
-  const speedChip = document.createElement('span');
-  speedChip.className = `chip speed-${speedLabel(node)}`;
-  speedChip.textContent = '--';
+  const delayBadge = document.createElement('span');
+  delayBadge.className = `node-delay-badge delay-${node.delayStatus}`;
+  delayBadge.textContent = delayValueLabel(node);
 
-  const nameChip = document.createElement('span');
-  nameChip.className = 'chip node-name';
-  nameChip.textContent = node.name;
-
-  card.append(delayChip, speedChip, nameChip);
+  card.append(nameSpan, delayBadge);
   return card;
 }
 
@@ -735,6 +743,7 @@ async function render(api, state = {}, interactionTracker) {
     const sectionEl = document.createElement('section');
     sectionEl.className = 'card';
     const heading = document.createElement('h2');
+    heading.className = 'section-heading';
     heading.textContent = section.title;
     sectionEl.append(heading);
 
@@ -749,22 +758,39 @@ async function render(api, state = {}, interactionTracker) {
       const summaryRow = document.createElement('span');
       summaryRow.className = 'summary-row';
 
-      const displayName = displayGroupName(group.name);
-      const nameSpan = document.createElement('span');
-      nameSpan.className = 'summary-group-name';
-      nameSpan.textContent = displayName;
+      const leftSpan = document.createElement('span');
+      if (group.sectionTitle === '按地区') {
+        leftSpan.className = 'region-badge';
+        leftSpan.textContent = regionBadgeLabel(group.scopeName);
+      } else if (group.sectionTitle === '按机场') {
+        leftSpan.className = 'airport-label';
+        leftSpan.textContent = group.scopeName;
+      } else {
+        leftSpan.className = 'aggregate-label';
+        leftSpan.textContent = '全部节点';
+      }
 
-      const statsSpan = document.createElement('span');
-      statsSpan.className = 'summary-stats';
-      statsSpan.textContent = `可用节点数：${group.availableCount}/${group.totalCount}`;
+      const healthMetrics = document.createElement('span');
+      healthMetrics.className = 'health-metrics';
 
-      const nowSpan = document.createElement('span');
-      nowSpan.className = 'summary-now';
-      nowSpan.textContent = `当前：${group.now || '未选择'}`;
+      const availabilityMetric = document.createElement('span');
+      availabilityMetric.className = 'availability-metric';
+      const availStrong = document.createElement('strong');
+      availStrong.textContent = String(group.availableCount);
+      availabilityMetric.append(availStrong, document.createTextNode(` / ${group.totalCount}`));
 
-      const delaySpan = document.createElement('span');
-      delaySpan.className = 'summary-delay';
-      delaySpan.textContent = groupCardSummary(group);
+      const delayMetric = document.createElement('span');
+      delayMetric.className = 'delay-metric';
+      delayMetric.textContent = summaryDelayText(group);
+
+      healthMetrics.append(availabilityMetric, delayMetric);
+
+      const summaryNodeSpan = document.createElement('span');
+      summaryNodeSpan.className = 'summary-node-name';
+      summaryNodeSpan.textContent = group.activeNodeName || '未选中节点';
+
+      const summaryActions = document.createElement('span');
+      summaryActions.className = 'summary-actions';
 
       const groupSpeedBtn = document.createElement('button');
       groupSpeedBtn.type = 'button';
@@ -795,7 +821,28 @@ async function render(api, state = {}, interactionTracker) {
         }
       });
 
-      summaryRow.append(nameSpan, statsSpan, nowSpan, delaySpan, groupSpeedBtn);
+      const locateBtn = document.createElement('button');
+      locateBtn.type = 'button';
+      locateBtn.className = 'group-locate-btn';
+      locateBtn.textContent = '定位📌';
+      locateBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const activeNode = group.activeNodeName;
+        if (activeNode && activeNode.trim()) {
+          const nodeCard = document.querySelector(`button.node-card[data-node-name="${activeNode}"]`);
+          if (nodeCard) {
+            details.open = true;
+            nodeCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            nodeCard.focus({ preventScroll: true });
+          }
+        } else {
+          setText('status', '当前分组未选中节点');
+        }
+      });
+
+      summaryActions.append(groupSpeedBtn, locateBtn);
+      summaryRow.append(leftSpan, healthMetrics, summaryNodeSpan, summaryActions);
       summary.append(summaryRow);
       details.append(summary);
 
@@ -803,7 +850,7 @@ async function render(api, state = {}, interactionTracker) {
       nodes.className = 'nodes';
       for (const node of group.nodes || []) {
         nodes.append(
-          nodeButton(group.name, node, node.name === group.now, async () => {
+          nodeButton(group.name, node, node.name === (group.activeNodeName || ''), async () => {
             await selectManualNode(api, group.name, node.name);
             await render(api, state, interactionTracker);
           }),
