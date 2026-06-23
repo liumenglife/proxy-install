@@ -777,12 +777,27 @@ button.node-card {
   color: #111827;
 }
 
-.node-card.active:hover,
-.node-card-active:hover {
+.node-card.active:hover {
+  background: linear-gradient(135deg, #fef3c7, #dbeafe);
   border-color: #f59e0b;
-  opacity: 0.9;
-  background: inherit;
+  color: #111827;
 }
+
+.node-card.active:hover .node-name {
+  color: #111827;
+}
+
+.node-card-active:hover {
+  background: linear-gradient(135deg, #fef3c7, #dbeafe);
+  border-color: #f59e0b;
+  color: #111827;
+}
+
+.node-card.active .node-delay-badge.delay-excellent { background: #dcfce7; color: #14532d; border-color: #22c55e; }
+.node-card.active .node-delay-badge.delay-good { background: #d1fae5; color: #14532d; border-color: #4ade80; }
+.node-card.active .node-delay-badge.delay-warning { background: #fef9c3; color: #713f12; border-color: #facc15; }
+.node-card.active .node-delay-badge.delay-poor { background: #f3e8ff; color: #581c87; border-color: #a855f7; }
+.node-card.active .node-delay-badge.delay-timeout { background: #fee2e2; color: #7f1d1d; border-color: #ef4444; }
 
 /* 延迟状态背景色 — 替代 border-left */
 .node-card.delay-excellent { background-color: #052e16; }

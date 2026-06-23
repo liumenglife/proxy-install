@@ -1188,13 +1188,37 @@ test('一级标题和 SVG 图标字号足够醒目', async () => {
   assert.match(iconBlock, /height:\s*(?:1\.(?:5[5-9]|[6-9]\d*)em|(?:3[6-9]|[4-9]\d)px)/s);
 });
 
-test('自动和手动代理选择标题都使用统一 section-heading', async () => {
+test('自动和手动一级标题使用同一 section-heading 且无额外缩小规则', async () => {
   const html = await readFile(indexHtml, 'utf8');
   const appSource = await readFile(join(__dirname, '..', 'ui', 'app.mjs'), 'utf8');
+  const css = await readFile(stylesCss, 'utf8');
 
   assert.match(html, /<h2[^>]*class="section-heading"[^>]*>[\s\S]*自动代理选择器[\s\S]*<\/h2>/);
   assert.match(appSource, /manualHeading\.className\s*=\s*'section-heading'/);
   assert.match(appSource, /appendSectionHeadingContent\([^,]+,\s*manualHeading,\s*'手动代理选择区域'\)/);
+  assert.equal(cssBlock(css, '.top-grid .section-heading'), '');
+  assert.equal(cssBlock(css, '.panel .section-heading'), '');
+});
+
+test('选中节点 hover 保持浅色选中背景', async () => {
+  const css = await readFile(stylesCss, 'utf8');
+  const activeHoverBlock = cssBlock(css, '.node-card.active:hover');
+
+  assert.ok(activeHoverBlock, '必须提供 .node-card.active:hover 样式');
+  assert.match(activeHoverBlock, /background(?:-image)?:[^;]*(?:#fef3c7|#dbeafe)/is);
+  assert.doesNotMatch(activeHoverBlock, /background(?:-image)?:[^;]*(?:var\(--bg-card-hover\)|#0f172a|#111827|rgba\(15,\s*23,\s*42)/is);
+});
+
+test('选中节点 hover 下延时 badge 保持语义可读', async () => {
+  const css = await readFile(stylesCss, 'utf8');
+  const statuses = ['excellent', 'good', 'warning', 'poor', 'timeout'];
+
+  for (const status of statuses) {
+    const block = cssBlock(css, `.node-card.active .node-delay-badge.delay-${status}`);
+    assert.ok(block, `必须提供 active delay-${status} 覆盖规则`);
+    assert.match(block, /background:\s*[^;]+;/s);
+    assert.match(block, /color:\s*[^;]+;/s);
+  }
 });
 
 test('按钮有 hover 和 active 伪类样式', async () => {
