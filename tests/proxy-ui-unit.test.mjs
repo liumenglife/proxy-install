@@ -686,6 +686,72 @@ test('无手动选中节点时分组摘要不显示节点名或延时', () => {
   assert.doesNotMatch(container.textContent, /未选中节点|timeout|ms/);
 });
 
+test('全部延时测试后节点 badge 使用 delayCache 新结果', () => {
+  const proxySet = {
+    '代理选择标签': {
+      name: '代理选择标签',
+      type: 'Selector',
+      now: '全部聚合/自动组',
+      all: ['全部聚合/自动组', '全部聚合/手动组'],
+    },
+    '全部聚合/自动组': {
+      name: '全部聚合/自动组',
+      type: 'URLTest',
+      now: '香港-机场-A',
+      all: ['香港-机场-A'],
+    },
+    '全部聚合/手动组': {
+      name: '全部聚合/手动组',
+      type: 'Selector',
+      now: '香港-机场-A',
+      all: ['香港-机场-A', '香港-机场-B'],
+    },
+  };
+  const mockDoc = createMockDocument();
+  const initialContainer = createMockElement();
+  const initialModel = buildProxyUiModel(proxySet);
+
+  proxyUi.renderProxyGroups(initialContainer, initialModel, mockDoc);
+
+  assert.deepEqual(
+    initialContainer.querySelectorAll('.node-delay-badge').map((badge) => badge.textContent.trim()),
+    ['timeout', 'timeout'],
+  );
+
+  const updatedContainer = createMockElement();
+  const updatedModel = buildProxyUiModel(proxySet, {
+    delayCache: new Map([
+      ['香港-机场-A', { delayMs: 88, status: 'excellent' }],
+      ['香港-机场-B', { delayMs: 188, status: 'excellent' }],
+    ]),
+  });
+
+  proxyUi.renderProxyGroups(updatedContainer, updatedModel, mockDoc);
+
+  assert.deepEqual(
+    updatedContainer.querySelectorAll('.node-delay-badge').map((badge) => badge.textContent.trim()),
+    ['88ms', '188ms'],
+  );
+});
+
+test('collectAllNodeNames 从所有手动分组收集唯一节点', () => {
+  assert.equal(typeof proxyUi.collectAllNodeNames, 'function', 'collectAllNodeNames 必须导出');
+  const model = {
+    manualSections: [
+      { groups: [{ nodes: [{ name: '香港-机场-A' }, { name: '香港-机场-B' }] }] },
+      { groups: [{ nodes: [{ name: '香港-机场-B' }, { name: '日本-机场-C' }] }] },
+    ],
+  };
+
+  assert.deepEqual(proxyUi.collectAllNodeNames(model), ['香港-机场-A', '香港-机场-B', '日本-机场-C']);
+});
+
+test('全量测试状态文案明确为延时测试', () => {
+  assert.equal(proxyUi.allDelayStatusText('progress', { completed: 0, total: 2, percentage: 0 }), '延时测试中... 0/2 (0%)');
+  assert.equal(proxyUi.allDelayStatusText('done', { total: 2 }), '全部延时测试完成：2 个节点');
+  assert.doesNotMatch(proxyUi.allDelayStatusText('done', { total: 2 }), /速度|测速/);
+});
+
 test('分组可用数不能大于总数且重复节点只统计一次', () => {
   const model = buildProxyUiModel({
     '代理选择标签': {

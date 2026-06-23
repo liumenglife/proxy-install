@@ -556,6 +556,29 @@ export function createRefreshScheduler({ state, syncProxies, intervalMs = 3000, 
   };
 }
 
+export function collectAllNodeNames(model) {
+  const allNodes = [];
+  const seen = new Set();
+  for (const section of (model?.manualSections || [])) {
+    for (const group of (section.groups || [])) {
+      for (const node of (group.nodes || [])) {
+        if (!node?.name || seen.has(node.name)) continue;
+        seen.add(node.name);
+        allNodes.push(node.name);
+      }
+    }
+  }
+  return allNodes;
+}
+
+export function allDelayStatusText(status, { completed = 0, total = 0, percentage = 0, error = '' } = {}) {
+  if (status === 'progress') return `延时测试中... ${completed}/${total} (${percentage}%)`;
+  if (status === 'done') return `全部延时测试完成：${total} 个节点`;
+  if (status === 'empty') return '没有可延时测试的节点';
+  if (status === 'error') return `延时测试失败：${error}`;
+  return '';
+}
+
 function delayValueLabel(node) {
   if (typeof node.delayMs === 'number') return `${node.delayMs}ms`;
   return 'timeout';
@@ -608,7 +631,7 @@ function buildGroupSummaryElements(doc, group) {
   const groupSpeedBtn = doc.createElement('button');
   groupSpeedBtn.type = 'button';
   groupSpeedBtn.className = 'group-speedtest-btn';
-  groupSpeedBtn.textContent = '测速';
+  groupSpeedBtn.textContent = '延时测试';
   groupSpeedBtn.setAttribute('data-testid', `group-speedtest-${group.name}`);
 
   const locateBtn = doc.createElement('button');
@@ -797,18 +820,18 @@ async function render(api, state = {}, interactionTracker) {
         if (nodeNames.length === 0) return;
         interactionTracker.startInteraction();
         try {
-          setText('status', `测速中... 0/${nodeNames.length} (0%)`);
+          setText('status', `延时测试中... 0/${nodeNames.length} (0%)`);
           const speedtest = createSpeedTest(api);
           const newResults = await speedtest.testNodes(nodeNames, ({ completed, total, percentage }) => {
-            setText('status', `测速中... ${completed}/${total} (${percentage}%)`);
+            setText('status', `延时测试中... ${completed}/${total} (${percentage}%)`);
           });
           for (const [name, delay] of newResults) {
             state.delayCache.set(name, delay);
           }
           await render(api, state, interactionTracker);
-          setText('status', `测速完成：${nodeNames.length} 个节点`);
+          setText('status', `延时测试完成：${nodeNames.length} 个节点`);
         } catch (error) {
-          setText('status', `测速失败：${error.message}`);
+          setText('status', `延时测试失败：${error.message}`);
         } finally {
           interactionTracker.endInteraction();
         }
@@ -908,37 +931,26 @@ export function startProxyUi(api = createApi()) {
   });
 
   document.getElementById('test-all-btn').addEventListener('click', async () => {
-    const allNodes = [];
-    const seen = new Set();
-    for (const section of (state.currentModel?.manualSections || [])) {
-      for (const group of (section.groups || [])) {
-        for (const node of (group.nodes || [])) {
-          if (!seen.has(node.name)) {
-            seen.add(node.name);
-            allNodes.push(node.name);
-          }
-        }
-      }
-    }
+    const allNodes = collectAllNodeNames(state.currentModel);
     if (allNodes.length === 0) {
-      setText('status', '没有可测速的节点');
+      setText('status', allDelayStatusText('empty'));
       return;
     }
 
     interactionTracker.startInteraction();
     try {
-      setText('status', `测速中... 0/${allNodes.length} (0%)`);
+      setText('status', allDelayStatusText('progress', { completed: 0, total: allNodes.length, percentage: 0 }));
       const speedtest = createSpeedTest(api);
       const newResults = await speedtest.testNodes(allNodes, ({ completed, total, percentage }) => {
-        setText('status', `测速中... ${completed}/${total} (${percentage}%)`);
+        setText('status', allDelayStatusText('progress', { completed, total, percentage }));
       });
       for (const [name, delay] of newResults) {
         state.delayCache.set(name, delay);
       }
       await render(api, state, interactionTracker);
-      setText('status', `全部测速完成：${allNodes.length} 个节点`);
+      setText('status', allDelayStatusText('done', { total: allNodes.length }));
     } catch (error) {
-      setText('status', `测速失败：${error.message}`);
+      setText('status', allDelayStatusText('error', { error: error.message }));
     } finally {
       interactionTracker.endInteraction();
     }
