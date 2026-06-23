@@ -272,6 +272,20 @@ export function buildProxyUiModel(proxies, options = {}) {
 
   const automaticSelectorOptions = buildAutomaticSelectorOptions(groups);
 
+  const isAutomaticMode = selector.now.endsWith('/自动组');
+  const isManualMode = selector.now.endsWith('/手动组');
+  const mode = {
+    type: isAutomaticMode ? 'automatic' : isManualMode ? 'manual' : selector.now === 'direct' ? 'direct' : 'unknown',
+    label: isAutomaticMode
+      ? '当前模式：自动组'
+      : isManualMode
+        ? `当前模式：手动组 · ${formatSelectorSegment(selector.now)}`
+        : selector.now === 'direct'
+          ? '当前模式：直连'
+          : '当前模式：未选择',
+  };
+  const routeSegments = parseRouteSegments(selector.now, routeTarget);
+
   return {
     automaticGroups,
     automaticSections: automaticSelectorOptions.map((option) => ({
@@ -281,7 +295,9 @@ export function buildProxyUiModel(proxies, options = {}) {
     automaticSelectorOptions,
     currentManualGroup,
     manualSections: buildManualSections(groups, delayCache, currentManualGroup),
+    mode,
     routeLabel: `${selector.now || '未选择'} → ${routeTarget}`,
+    routeSegments,
     sections: [...sectionMap].map(([title, items]) => ({ title, items })),
     selectedAutomaticGroup,
     selectorNow: selector.now || '',
@@ -372,6 +388,36 @@ export function createApi(baseUrl = '/api') {
 function setText(id, text) {
   const element = document.getElementById(id);
   if (element) element.textContent = text;
+}
+
+function renderModeBanner(container, mode) {
+  if (!container) return;
+  container.className = `mode-banner mode-${mode.type}`;
+  const iconMap = { automatic: '🤖', manual: '🎯', direct: '⚡', unknown: '❓' };
+  container.textContent = `${iconMap[mode.type] || '❓'} ${mode.label}`;
+}
+
+function renderRouteTrack(container, segments) {
+  if (!container) return;
+  container.replaceChildren();
+  const chipData = [
+    { testid: 'route-segment-selector', text: segments.selector },
+    { testid: 'route-segment-provider', text: segments.provider },
+    { testid: 'route-segment-node', text: segments.node || '未选择' },
+  ];
+  for (let i = 0; i < chipData.length; i++) {
+    const chip = document.createElement('span');
+    chip.className = 'route-chip';
+    chip.setAttribute('data-testid', chipData[i].testid);
+    chip.textContent = chipData[i].text;
+    container.append(chip);
+    if (i < chipData.length - 1) {
+      const arrow = document.createElement('span');
+      arrow.className = 'route-arrow';
+      arrow.textContent = '→';
+      container.append(arrow);
+    }
+  }
 }
 
 function updateExpandToggleLabel() {
@@ -663,6 +709,9 @@ async function render(api, state = {}, interactionTracker) {
   setText('manual-status', model.currentManualGroup ? `当前为手动组：${model.currentManualGroup}` : '当前为自动组');
 
   updateProxyToggleUI(model.selectorNow !== 'direct');
+
+  renderModeBanner(document.getElementById('mode-banner'), model.mode);
+  renderRouteTrack(document.getElementById('route-track'), model.routeSegments);
 
   const select = document.getElementById('auto-group-select');
   select.replaceChildren();

@@ -1021,6 +1021,51 @@ test('路由拆分失败时保守回退到完整节点名', () => {
   });
 });
 
+// ============================================================
+// Task 3：实际路由三段式轨道和状态横幅
+// ============================================================
+
+test('模型包含三段式路由和醒目模式状态', () => {
+  const model = buildProxyUiModel({
+    '代理选择标签': { name: '代理选择标签', type: 'Selector', now: '按地区/美国/自动组', all: [] },
+    '按地区/美国/自动组': { name: '按地区/美国/自动组', type: 'URLTest', now: '美国-猫熊机场-🇺🇸 直连-V350-美国-1x-NF&HBO&Disney*', all: [] },
+  });
+
+  assert.equal(model.mode.type, 'automatic');
+  assert.equal(model.mode.label, '当前模式：自动组');
+  assert.deepEqual(model.routeSegments, {
+    selector: '按地区 / 美国 / 自动组',
+    provider: '🇺🇸 美国 · 猫熊机场',
+    node: '🇺🇸 直连-V350-美国-1x-NF&HBO&Disney*',
+    fallback: false,
+  });
+});
+
+test('模型 mode.type 区分手动组、直连和未知模式', () => {
+  const manualModel = buildProxyUiModel({
+    '代理选择标签': { name: '代理选择标签', type: 'Selector', now: '按地区/香港/手动组', all: [] },
+    '按地区/香港/手动组': { name: '按地区/香港/手动组', type: 'Selector', now: '香港-猫熊机场-V301', all: ['香港-猫熊机场-V301'] },
+  });
+
+  assert.equal(manualModel.mode.type, 'manual');
+  assert.match(manualModel.mode.label, /当前模式：手动组 · /);
+  assert.match(manualModel.mode.label, /按地区 \/ 香港 \/ 手动组/);
+
+  const directModel = buildProxyUiModel({
+    '代理选择标签': { name: '代理选择标签', type: 'Selector', now: 'direct', all: ['direct'] },
+  });
+
+  assert.equal(directModel.mode.type, 'direct');
+  assert.equal(directModel.mode.label, '当前模式：直连');
+});
+
+test('HTML 包含 mode-banner 和 route-track 容器', async () => {
+  const html = await readFile(indexHtml, 'utf8');
+
+  assert.match(html, /data-testid="mode-banner"/);
+  assert.match(html, /data-testid="route-track"/);
+});
+
 test('地区旗帜映射和地域徽章标签', () => {
   assert.equal(proxyUi.regionFlag('香港'), '🇭🇰');
   assert.equal(proxyUi.regionFlag('澳门'), '🇲🇴');
