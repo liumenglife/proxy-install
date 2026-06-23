@@ -35,7 +35,18 @@
 
       <section class="top-grid" data-testid="top-status-bar" aria-label="顶部控制区">
         <div class="panel">
-          <h2 class="section-heading">🤖 自动代理选择器</h2>
+          <h2 class="section-heading">
+            <svg class="section-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="5" y="7" width="14" height="10" rx="2"></rect>
+              <path d="M9 7V4"></path>
+              <path d="M15 7V4"></path>
+              <circle cx="9" cy="12" r="1"></circle>
+              <circle cx="15" cy="12" r="1"></circle>
+              <path d="M8 17v2"></path>
+              <path d="M16 17v2"></path>
+            </svg>
+            <span>自动代理选择器</span>
+          </h2>
           <label class="capability-title" for="auto-group-select">自动组代理选择器</label>
           <select id="auto-group-select" data-testid="auto-group-select"></select>
           <p id="manual-status" class="hint"></p>

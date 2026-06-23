@@ -104,11 +104,53 @@ function displaySectionTitle(groupName) {
   return groupName.split('/')[0] || groupName;
 }
 
-function sectionIcon(title) {
-  if (title === '全部聚合') return '🔗 全部聚合';
-  if (title === '按机场') return '🛫 按机场';
-  if (title === '按地区') return '🌐 按地区';
-  return title;
+function sectionIconName(title) {
+  if (title === '全部聚合') return 'aggregate';
+  if (title === '按机场') return 'airport';
+  if (title === '按地区') return 'region';
+  if (title === '手动代理选择区域') return 'manual';
+  return 'manual';
+}
+
+function createSvgElement(doc, tagName) {
+  return typeof doc.createElementNS === 'function'
+    ? doc.createElementNS('http://www.w3.org/2000/svg', tagName)
+    : doc.createElement(tagName);
+}
+
+function createSectionIcon(doc, type) {
+  const svg = createSvgElement(doc, 'svg');
+  svg.setAttribute('class', 'section-icon');
+  if (typeof svg.className === 'string') svg.className = 'section-icon';
+  else if (svg.className?.baseVal !== undefined) svg.className.baseVal = 'section-icon';
+  svg.setAttribute('aria-hidden', 'true');
+  svg.setAttribute('viewBox', '0 0 24 24');
+  svg.setAttribute('fill', 'none');
+  svg.setAttribute('stroke', 'currentColor');
+  svg.setAttribute('stroke-width', '2');
+  svg.setAttribute('stroke-linecap', 'round');
+  svg.setAttribute('stroke-linejoin', 'round');
+
+  const pathsByType = {
+    aggregate: ['M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71', 'M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71'],
+    airport: ['M2 16l20-8-20-8 6 8-6 8z', 'M8 8h7', 'M8 16h7'],
+    region: ['M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z', 'M3.6 9h16.8', 'M3.6 15h16.8', 'M12 3a14 14 0 0 1 0 18', 'M12 3a14 14 0 0 0 0 18'],
+    manual: ['M4 21v-7', 'M4 10V3', 'M12 21v-9', 'M12 8V3', 'M20 21v-5', 'M20 12V3', 'M2 14h4', 'M10 8h4', 'M18 16h4'],
+  };
+
+  for (const d of pathsByType[type] || pathsByType.manual) {
+    const path = createSvgElement(doc, 'path');
+    path.setAttribute('d', d);
+    svg.append(path);
+  }
+  return svg;
+}
+
+function appendSectionHeadingContent(doc, heading, title) {
+  heading.append(createSectionIcon(doc, sectionIconName(title)));
+  const text = doc.createElement('span');
+  text.textContent = title;
+  heading.append(text);
 }
 
 function orderIndex(values, value) {
@@ -652,7 +694,7 @@ export function renderProxyGroups(container, model, docOverride) {
 
   const manualHeading = doc.createElement('h2');
   manualHeading.className = 'section-heading';
-  manualHeading.textContent = '手动代理选择区域';
+  appendSectionHeadingContent(doc, manualHeading, '手动代理选择区域');
   sections.append(manualHeading);
 
   for (const section of model.manualSections) {
@@ -660,7 +702,7 @@ export function renderProxyGroups(container, model, docOverride) {
     sectionEl.className = 'card';
     const heading = doc.createElement('h2');
     heading.className = 'section-heading';
-    heading.textContent = sectionIcon(section.title);
+    appendSectionHeadingContent(doc, heading, section.title);
     sectionEl.append(heading);
 
     for (const group of section.groups) {
@@ -793,7 +835,7 @@ async function render(api, state = {}, interactionTracker) {
 
   const manualHeading = document.createElement('h2');
   manualHeading.className = 'section-heading';
-  manualHeading.textContent = '手动代理选择区域';
+  appendSectionHeadingContent(document, manualHeading, '手动代理选择区域');
   sections.append(manualHeading);
 
   for (const section of model.manualSections) {
@@ -801,7 +843,7 @@ async function render(api, state = {}, interactionTracker) {
     sectionEl.className = 'card';
     const heading = document.createElement('h2');
     heading.className = 'section-heading';
-    heading.textContent = sectionIcon(section.title);
+    appendSectionHeadingContent(document, heading, section.title);
     sectionEl.append(heading);
 
     for (const group of section.groups) {

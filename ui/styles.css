@@ -335,6 +335,9 @@ select:focus {
 /* ---- 大区域标题 ---- */
 
 .section-heading {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
   font-size: 1.1rem;
   margin-bottom: 0.75rem;
   padding-bottom: 0.5rem;
@@ -344,7 +347,11 @@ select:focus {
 .section-icon {
   display: inline-flex;
   align-items: center;
-  margin-right: 0.25rem;
+  width: 1.15em;
+  height: 1.15em;
+  flex: 0 0 auto;
+  color: var(--accent);
+  stroke: currentColor;
 }
 
 /* ---- 地域徽章 ---- */
