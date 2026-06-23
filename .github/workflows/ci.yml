@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  unit-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: bun test
+
+  compose-config:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - run: bash scripts/test-compose-config.sh
+
+  playwright:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: [unit-test, compose-config]
+    continue-on-error: true
+    env:
+      PLAYWRIGHT_DEV_SERVER: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: npx playwright install chromium --with-deps
+      - run: bunx playwright test --reporter=line || echo "E2E 依赖真实后端 sing-box API，允许跳过"
