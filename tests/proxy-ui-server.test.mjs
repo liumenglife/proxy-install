@@ -68,7 +68,7 @@ test('本地 ui/index.html 包含同步状态 DOM 元素 sync-status、last-sync
   assert.match(html, /data-testid="sync-now"/);
 });
 
-test('部署端 9091 /app.mjs 哈希等于本地 ui/app.mjs 哈希', { skip: !process.env.CI && !process.env.TEST_DEPLOY }, async () => {
+test('部署端 9091 /app.mjs 哈希等于本地 ui/app.mjs 哈希', { skip: !!process.env.CI || !process.env.TEST_DEPLOY }, async () => {
   const localScript = await readFile(new URL('../ui/app.mjs', import.meta.url));
   const localHash = createHash('sha256').update(localScript).digest('hex');
 
@@ -128,7 +128,7 @@ test('sanitizeControlResponse 只保留 ok、summary、timestamp', () => {
   });
 });
 
-test('部署端 9091 页面包含 sync-status 同步元素', { skip: !process.env.CI && !process.env.TEST_DEPLOY }, async () => {
+test('部署端 9091 页面包含 sync-status 同步元素', { skip: !!process.env.CI || !process.env.TEST_DEPLOY }, async () => {
   let response;
   try {
     response = await fetch(`${DEPLOY_URL}/`, { signal: AbortSignal.timeout(5000) });
