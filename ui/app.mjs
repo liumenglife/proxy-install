@@ -610,6 +610,11 @@ export function renderProxyGroups(container, model, docOverride) {
   const doc = docOverride || document;
   const sections = container;
 
+  const manualHeading = doc.createElement('h2');
+  manualHeading.className = 'section-heading';
+  manualHeading.textContent = '手动代理选择区域';
+  sections.append(manualHeading);
+
   for (const section of model.manualSections) {
     const sectionEl = doc.createElement('section');
     sectionEl.className = 'card';
@@ -746,6 +751,12 @@ async function render(api, state = {}, interactionTracker) {
 
   const sections = document.getElementById('sections');
   sections.replaceChildren();
+
+  const manualHeading = document.createElement('h2');
+  manualHeading.className = 'section-heading';
+  manualHeading.textContent = '手动代理选择区域';
+  sections.append(manualHeading);
+
   for (const section of model.manualSections) {
     const sectionEl = document.createElement('section');
     sectionEl.className = 'card';
