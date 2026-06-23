@@ -1185,6 +1185,75 @@ test('只有代理选择标签指向的手动组显示选中态', () => {
 });
 
 // ============================================================
+// Task 5：错误节点信息根因调研与定向修复
+// ============================================================
+
+test('复现自动组模式下手动区不应显示机场或地区旧节点信息', () => {
+  const model = buildProxyUiModel({
+    '代理选择标签': { name: '代理选择标签', type: 'Selector', now: '按地区/香港/自动组', all: [] },
+    '按地区/香港/自动组': { name: '按地区/香港/自动组', type: 'URLTest', now: '香港-猫熊机场-A', all: ['香港-猫熊机场-A'] },
+    '按机场/猫熊机场/手动组': { name: '按机场/猫熊机场/手动组', type: 'Selector', now: '日本-猫熊机场-旧节点', all: ['香港-猫熊机场-A', '日本-猫熊机场-旧节点'] },
+    '按地区/香港/手动组': { name: '按地区/香港/手动组', type: 'Selector', now: '香港-猫熊机场-A', all: ['香港-猫熊机场-A'] },
+    '按地区/日本/手动组': { name: '按地区/日本/手动组', type: 'Selector', now: '日本-猫熊机场-旧节点', all: ['日本-猫熊机场-旧节点'] },
+  });
+
+  const groups = model.manualSections.flatMap((section) => section.groups);
+  assert.equal(groups.every((group) => group.activeNodeName === ''), true, '自动组模式下所有手动组的 activeNodeName 应为空');
+  assert.equal(model.currentManualGroup, '', '自动组模式下 currentManualGroup 应为空');
+});
+
+test('手动机场选择只允许对应机场显示摘要和选中态', () => {
+  const model = buildProxyUiModel({
+    '代理选择标签': { name: '代理选择标签', type: 'Selector', now: '按机场/猫熊机场/手动组', all: [] },
+    '按机场/猫熊机场/手动组': { name: '按机场/猫熊机场/手动组', type: 'Selector', now: '香港-猫熊机场-A', all: ['香港-猫熊机场-A'] },
+    '按地区/香港/手动组': { name: '按地区/香港/手动组', type: 'Selector', now: '香港-猫熊机场-A', all: ['香港-猫熊机场-A'] },
+    '全部聚合/手动组': { name: '全部聚合/手动组', type: 'Selector', now: '香港-猫熊机场-A', all: ['香港-猫熊机场-A'] },
+  });
+
+  const airportGroup = model.manualSections.find((s) => s.title === '按机场').groups[0];
+  const regionGroup = model.manualSections.find((s) => s.title === '按地区').groups[0];
+  const aggregateGroup = model.manualSections.find((s) => s.title === '全部聚合').groups[0];
+
+  assert.equal(airportGroup.activeNodeName, '香港-猫熊机场-A');
+  assert.equal(regionGroup.activeNodeName, '');
+  assert.equal(aggregateGroup.activeNodeName, '');
+});
+
+test('手动地区选择只允许对应地区显示摘要和选中态', () => {
+  const model = buildProxyUiModel({
+    '代理选择标签': { name: '代理选择标签', type: 'Selector', now: '按地区/香港/手动组', all: [] },
+    '按地区/香港/手动组': { name: '按地区/香港/手动组', type: 'Selector', now: '香港-猫熊机场-A', all: ['香港-猫熊机场-A'] },
+    '按机场/猫熊机场/手动组': { name: '按机场/猫熊机场/手动组', type: 'Selector', now: '香港-猫熊机场-A', all: ['香港-猫熊机场-A'] },
+    '全部聚合/手动组': { name: '全部聚合/手动组', type: 'Selector', now: '香港-猫熊机场-A', all: ['香港-猫熊机场-A'] },
+  });
+
+  const regionGroup = model.manualSections.find((s) => s.title === '按地区').groups[0];
+  const airportGroup = model.manualSections.find((s) => s.title === '按机场').groups[0];
+  const aggregateGroup = model.manualSections.find((s) => s.title === '全部聚合').groups[0];
+
+  assert.equal(regionGroup.activeNodeName, '香港-猫熊机场-A');
+  assert.equal(airportGroup.activeNodeName, '');
+  assert.equal(aggregateGroup.activeNodeName, '');
+});
+
+test('delayCache 只影响延时状态不影响手动组摘要和选中态', () => {
+  const model = buildProxyUiModel(
+    {
+      '代理选择标签': { name: '代理选择标签', type: 'Selector', now: '按地区/香港/自动组', all: [] },
+      '按地区/香港/自动组': { name: '按地区/香港/自动组', type: 'URLTest', now: '香港-猫熊机场-A', all: ['香港-猫熊机场-A'] },
+      '按机场/猫熊机场/手动组': { name: '按机场/猫熊机场/手动组', type: 'Selector', now: '日本-猫熊机场-旧节点', all: ['日本-猫熊机场-旧节点'] },
+    },
+    {
+      delayCache: new Map([['日本-猫熊机场-旧节点', { delayMs: 88, status: 'excellent' }]]),
+    },
+  );
+
+  const airportGroup = model.manualSections.find((section) => section.title === '按机场').groups[0];
+  assert.equal(airportGroup.activeNodeName, '', '自动组模式下 delayCache 不应使手动组出现选中态');
+  assert.ok(typeof airportGroup.currentNodeDelay === 'object', 'delayCache 应正确计算延时信息');
+});
+
+// ============================================================
 // Task 2：顶部按钮重组、单一展开切换和快捷键
 // ============================================================
 
