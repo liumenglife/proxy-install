@@ -191,7 +191,15 @@ function buildDelayCache(proxies, optionDelayCache) {
 }
 
 function sortNodesByDelay(nodeNames, delayCache) {
-  return nodeNames
+  const uniqueNodeNames = [];
+  const seen = new Set();
+  for (const name of nodeNames) {
+    if (!name || seen.has(name)) continue;
+    seen.add(name);
+    uniqueNodeNames.push(name);
+  }
+
+  return uniqueNodeNames
     .map((name, index) => {
       const delay = normalizeDelayEntry(delayCache.get(name));
       const hasDelay = availableDelayStatuses.has(delay.status) && typeof delay.delayMs === 'number';
@@ -212,8 +220,8 @@ function sortNodesByDelay(nodeNames, delayCache) {
 
 function buildManualGroup(proxy, parsed, delayCache, currentManualGroup) {
   const nodes = sortNodesByDelay(proxy.all || [], delayCache);
-  const currentNodeDelay = normalizeDelayEntry(delayCache.get(proxy.now));
   const activeNodeName = parsed.proxy.name === currentManualGroup ? proxy.now || '' : '';
+  const currentNodeDelay = normalizeDelayEntry(delayCache.get(proxy.now));
   return {
     ...proxy,
     scopeName: parsed.scopeName,
@@ -224,7 +232,7 @@ function buildManualGroup(proxy, parsed, delayCache, currentManualGroup) {
     totalCount: nodes.length,
     currentNodeDelay,
     currentNodeSpeed: '--',
-    availabilityColor: currentNodeDelay.status,
+    availabilityColor: currentNodeDelay?.status || 'timeout',
   };
 }
 
@@ -585,9 +593,10 @@ function buildGroupSummaryElements(doc, group) {
 
   const delayMetric = doc.createElement('span');
   delayMetric.className = 'delay-metric';
-  delayMetric.textContent = summaryDelayText(group);
+  if (group.activeNodeName) delayMetric.textContent = summaryDelayText(group);
 
-  healthMetrics.append(availabilityMetric, delayMetric);
+  healthMetrics.append(availabilityMetric);
+  if (group.activeNodeName) healthMetrics.append(delayMetric);
 
   const summaryNodeSpan = doc.createElement('span');
   summaryNodeSpan.className = 'summary-node-name';

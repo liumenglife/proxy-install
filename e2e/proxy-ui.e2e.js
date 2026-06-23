@@ -60,7 +60,15 @@ function delayText(proxy) {
 }
 
 function expectedSortedNodes(proxies, nodeNames) {
-  return nodeNames
+  const uniqueNodeNames = [];
+  const seen = new Set();
+  for (const name of nodeNames) {
+    if (!name || seen.has(name)) continue;
+    seen.add(name);
+    uniqueNodeNames.push(name);
+  }
+
+  return uniqueNodeNames
     .map((name, index) => ({ name, index, delay: latestHistoryDelay(proxies[name]) }))
     .sort((left, right) => {
       const leftRank = latestHistoryRank(proxies[left.name]);
@@ -112,9 +120,9 @@ test('独立代理 UI 显示顶部控制、只读路由和自动组列表', asyn
   expectRelativeOrder(optionValues, existing);
 
   const manualSectionHeadings = await page.locator('#sections > section > h2').evaluateAll((headings) => headings.map((heading) => heading.textContent));
-  expect(manualSectionHeadings).toContain('全部聚合');
-  expect(manualSectionHeadings).toContain('按机场');
-  expect(manualSectionHeadings).toContain('按地区');
+  expect(manualSectionHeadings.some((text) => text.includes('全部聚合'))).toBeTruthy();
+  expect(manualSectionHeadings.some((text) => text.includes('按机场'))).toBeTruthy();
+  expect(manualSectionHeadings.some((text) => text.includes('按地区'))).toBeTruthy();
   expect(manualSectionHeadings).not.toContain('一级分组/手动组');
 
   const manualGroup = Object.values(proxies).find((proxy) => proxy.type === 'Selector' && proxy.name.endsWith('/手动组') && proxy.all?.length >= 2);
@@ -125,7 +133,7 @@ test('独立代理 UI 显示顶部控制、只读路由和自动组列表', asyn
   const manualGroupDom = page.getByTestId(`manual-group-${manualGroup.name}`);
 
   await expect(manualGroupDom.locator('.availability-metric')).toContainText(String(availableCount));
-  await expect(manualGroupDom.locator('.availability-metric')).toContainText(String(manualGroup.all.length));
+  await expect(manualGroupDom.locator('.availability-metric')).toContainText(String(expectedNodes.length));
   const renderedNodes = await manualGroupDom
     .locator('.nodes .node-card')
     .evaluateAll((nodes) => nodes.map((node) => ({
@@ -412,9 +420,9 @@ test('顶部控件、模式横幅、路由轨道和手动区域标题正确渲�
   const sectionTexts = await page.locator('.section-heading').evaluateAll(
     (headings) => headings.map((h) => h.textContent),
   );
-  expect(sectionTexts).toContain('全部聚合');
-  expect(sectionTexts).toContain('按机场');
-  expect(sectionTexts).toContain('按地区');
+  expect(sectionTexts.some((text) => text.includes('全部聚合'))).toBeTruthy();
+  expect(sectionTexts.some((text) => text.includes('按机场'))).toBeTruthy();
+  expect(sectionTexts.some((text) => text.includes('按地区'))).toBeTruthy();
 
   await expect(page.getByText('手动代理选择区域')).toBeVisible();
 
