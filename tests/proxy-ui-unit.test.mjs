@@ -1057,6 +1057,24 @@ test('模型 mode.type 区分手动组、直连和未知模式', () => {
 
   assert.equal(directModel.mode.type, 'direct');
   assert.equal(directModel.mode.label, '当前模式：直连');
+
+  const unknownModel = buildProxyUiModel({
+    '代理选择标签': { name: '代理选择标签', type: 'Selector', now: 'foobar', all: ['foobar'] },
+  });
+
+  assert.equal(unknownModel.mode.type, 'unknown');
+  assert.equal(unknownModel.mode.label, '当前模式：未选择');
+});
+
+test('buildProxyUiModel 在 routeTarget 段数不足时返回 routeSegments.fallback', () => {
+  const model = buildProxyUiModel({
+    '代理选择标签': { name: '代理选择标签', type: 'Selector', now: '全部聚合/手动组', all: [] },
+    '全部聚合/手动组': { name: '全部聚合/手动组', type: 'Selector', now: '直连', all: ['直连'] },
+  });
+
+  assert.equal(model.routeSegments.fallback, true);
+  assert.equal(model.routeSegments.provider, '');
+  assert.equal(model.routeSegments.node, '直连');
 });
 
 test('HTML 包含 mode-banner 和 route-track 容器', async () => {
