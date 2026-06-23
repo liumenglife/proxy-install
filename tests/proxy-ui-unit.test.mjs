@@ -1177,6 +1177,22 @@ test('CSS 包含区域标题、地域徽章、路由轨道和健康指标样式'
   assert.doesNotMatch(css, /\.toolbar\s*\{/);
 });
 
+test('CSS 将地区、机场和全部节点标签做成醒目的控制台航站牌', async () => {
+  const css = await readFile(stylesCss, 'utf8');
+
+  assert.match(css, /\.region-badge\s*\{[^}]*font-size:\s*(1\.(?:1[5-9]|[2-9]\d*)rem|(?:1[8-9]|[2-9]\d+)px)/s);
+  assert.match(css, /\.region-badge\s*\{[^}]*font-weight:\s*(?:[7-9]\d{2}|bold|bolder)/s);
+  assert.match(css, /\.region-badge\s*\{[^}]*(?:rgba\(59,\s*130,\s*246|var\(--accent\)|box-shadow:)/s);
+
+  assert.match(css, /\.airport-label\s*\{[^}]*font-size:\s*(1\.(?:0[5-9]|[1-9]\d*)rem|(?:1[7-9]|[2-9]\d+)px)/s);
+  assert.match(css, /\.airport-label\s*\{[^}]*font-weight:\s*(?:[7-9]\d{2}|bold|bolder)/s);
+  assert.match(css, /\.airport-label\s*\{[^}]*(?:background:|background-color:|border:|color:\s*(?!var\(--text-muted\)|var\(--text-secondary\)|#94a3b8|#64748b))/s);
+
+  assert.match(css, /\.aggregate-label\s*\{[^}]*font-size:\s*(?:1(?:\.\d+)?rem|(?:1[6-9]|[2-9]\d+)px)/s);
+  assert.match(css, /\.aggregate-label\s*\{[^}]*font-weight:\s*(?:[7-9]\d{2}|bold|bolder)/s);
+  assert.match(css, /\.aggregate-label\s*\{[^}]*(?:background:|background-color:|border:|box-shadow:|color:\s*(?!var\(--text-muted\)|var\(--text-secondary\)|#94a3b8|#64748b))/s);
+});
+
 // ============================================================
 // Task 1：模型纯函数与单元契约
 // ============================================================
