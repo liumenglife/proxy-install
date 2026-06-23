@@ -740,17 +740,19 @@ summary::-webkit-details-marker {
 
 .node-card:hover {
   border-color: rgba(255, 255, 255, 0.18);
+  filter: brightness(1.85);
 }
 
 .node-card:active {
   transform: scale(0.98);
+  filter: brightness(2.2);
 }
 
 button.node-card {
   font-family: inherit;
 }
 
-/* 延迟状态背景色 — 声明在 .node-card.active 之前才不会被覆盖 */
+/* 延迟状态背景色 */
 .node-card.delay-excellent { background-color: #052e16; }
 .node-card.delay-good { background-color: #14532d; }
 .node-card.delay-warning { background-color: #422006; }
@@ -758,10 +760,12 @@ button.node-card {
 .node-card.delay-timeout { background-color: #450a0a; }
 .node-card.delay-unknown { background-color: #1e293b; }
 
+/* 选中态 — 覆盖 delay 背景色（同 specificity 0,2,0，源顺序靠后） */
 .node-card.active {
   border: 3px solid #f59e0b;
   background: linear-gradient(135deg, #fef3c7, #dbeafe);
   color: #111827;
+  filter: none;
 }
 
 .node-card.active .node-name {
@@ -777,26 +781,31 @@ button.node-card {
   padding: 1px 6px;
 }
 
-.node-card-active {
+.node-card.node-card-active,
+.node-card.active.node-card-active {
   border: 3px solid #f59e0b;
   background: linear-gradient(135deg, #fef3c7, #dbeafe);
   color: #111827;
+  filter: none;
 }
 
 .node-card.active:hover {
   background: linear-gradient(135deg, #fef3c7, #dbeafe);
   border-color: #f59e0b;
   color: #111827;
+  filter: none;
 }
 
 .node-card.active:hover .node-name {
   color: #111827;
 }
 
-.node-card-active:hover {
+.node-card.node-card-active:hover,
+.node-card.active.node-card-active:hover {
   background: linear-gradient(135deg, #fef3c7, #dbeafe);
   border-color: #f59e0b;
   color: #111827;
+  filter: none;
 }
 
 .node-card.active .node-delay-badge.delay-excellent { background: #dcfce7; color: #14532d; border-color: #22c55e; }
