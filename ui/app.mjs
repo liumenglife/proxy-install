@@ -2,7 +2,7 @@ import { createSpeedTest } from './speedtest.mjs';
 
 const selectorName = '代理选择标签';
 
-export const readonlyAutomaticNodeMessage = '自动组不可手动选择，请去对应手动组选择';
+export const readonlyAutomaticNodeMessage = '';
 
 const regionFlags = new Map([
   ['香港', '🇭🇰'], ['澳门', '🇲🇴'], ['新加坡', '🇸🇬'], ['美国', '🇺🇸'],
@@ -366,7 +366,7 @@ export async function selectAutomaticGroup(api, automaticGroup) {
 }
 
 export async function selectAutomaticNode() {
-  return readonlyAutomaticNodeMessage;
+  return '';
 }
 
 export async function selectManualNode(api, manualGroup, nodeName) {
@@ -687,7 +687,9 @@ function buildGroupSummaryElements(doc, group) {
   availabilityMetric.append(availStrong, doc.createTextNode(` / ${group.totalCount}`));
 
   const delayMetric = doc.createElement('span');
-  delayMetric.className = 'delay-metric';
+  delayMetric.className = group.activeNodeName && group.currentNodeDelay?.status
+    ? `delay-metric delay-${group.currentNodeDelay.status}`
+    : 'delay-metric';
   if (group.activeNodeName) delayMetric.textContent = summaryDelayText(group);
 
   healthMetrics.append(availabilityMetric);
@@ -709,8 +711,26 @@ function buildGroupSummaryElements(doc, group) {
   const locateBtn = doc.createElement('button');
   locateBtn.type = 'button';
   locateBtn.className = 'group-locate-btn';
-  locateBtn.textContent = '定位📌';
   locateBtn.setAttribute('data-testid', `group-locate-${group.name}`);
+  const locateIcon = createSvgElement(doc, 'svg');
+  locateIcon.setAttribute('class', 'button-icon');
+  if (typeof locateIcon.className === 'string') locateIcon.className = 'button-icon';
+  else if (locateIcon.className?.baseVal !== undefined) locateIcon.className.baseVal = 'button-icon';
+  locateIcon.setAttribute('aria-hidden', 'true');
+  locateIcon.setAttribute('viewBox', '0 0 24 24');
+  locateIcon.setAttribute('fill', 'none');
+  locateIcon.setAttribute('stroke', 'currentColor');
+  locateIcon.setAttribute('stroke-width', '2');
+  locateIcon.setAttribute('stroke-linecap', 'round');
+  locateIcon.setAttribute('stroke-linejoin', 'round');
+  for (const d of ['M20 10c0 6-8 12-8 12S4 16 4 10a8 8 0 1 1 16 0z', 'M12 10a2 2 0 1 0 0.01 0']) {
+    const path = createSvgElement(doc, 'path');
+    path.setAttribute('d', d);
+    locateIcon.append(path);
+  }
+  const locateText = doc.createElement('span');
+  locateText.textContent = '定位';
+  locateBtn.append(locateIcon, locateText);
 
   summaryActions.append(groupSpeedBtn, locateBtn);
   summaryRow.append(leftSpan, healthMetrics, summaryNodeSpan, summaryActions);
@@ -763,7 +783,7 @@ function buildNodeCard(doc, node, active) {
   const card = doc.createElement('button');
   card.type = 'button';
   card.className = active
-    ? `node-card node-card-active delay-${node.delayStatus}`
+    ? `node-card active node-card-active delay-${node.delayStatus}`
     : `node-card delay-${node.delayStatus}`;
   card.dataset.nodeName = node.name;
   card.setAttribute('data-delay-status', node.delayStatus);
@@ -785,7 +805,7 @@ function nodeButton(groupName, node, active, onClick) {
   const card = document.createElement('button');
   card.type = 'button';
   card.className = active
-    ? `node-card node-card-active delay-${node.delayStatus}`
+    ? `node-card active node-card-active delay-${node.delayStatus}`
     : `node-card delay-${node.delayStatus}`;
   card.dataset.nodeName = node.name;
   card.setAttribute('data-delay-status', node.delayStatus);

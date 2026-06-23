@@ -319,19 +319,26 @@ select:focus {
 
 .route-chip-selector {
   font-weight: 600;
-  color: var(--accent);
-  background: rgba(59, 130, 246, 0.1);
-  border-color: rgba(59, 130, 246, 0.2);
+  color: #dbeafe;
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.45), rgba(129, 140, 248, 0.28));
+  border-color: rgba(129, 140, 248, 0.62);
+  box-shadow: inset 0 1px 0 rgba(219, 234, 254, 0.16), 0 10px 28px rgba(59, 130, 246, 0.18);
 }
 
 .route-chip-provider {
-  color: var(--text-primary);
+  color: #fef3c7;
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.40), rgba(250, 204, 21, 0.20));
+  border-color: rgba(250, 204, 21, 0.55);
+  box-shadow: inset 0 1px 0 rgba(254, 243, 199, 0.18), 0 10px 28px rgba(245, 158, 11, 0.16);
 }
 
 .route-chip-node {
   font-family: monospace;
   font-size: clamp(0.9rem, 1.6vw, 1.05rem);
-  color: var(--text-secondary);
+  color: #fce7f3;
+  background: linear-gradient(135deg, rgba(190, 24, 93, 0.38), rgba(124, 58, 237, 0.26));
+  border-color: rgba(236, 72, 153, 0.50);
+  box-shadow: inset 0 1px 0 rgba(252, 231, 243, 0.16), 0 10px 28px rgba(190, 24, 93, 0.14);
 }
 
 .route-arrow {
@@ -375,10 +382,10 @@ select:focus {
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
-  color: #dbeafe;
-  background: linear-gradient(135deg, rgba(59, 130, 246, 0.18), rgba(14, 165, 233, 0.10));
-  border: 1px solid rgba(59, 130, 246, 0.35);
-  box-shadow: inset 0 1px 0 rgba(191, 219, 254, 0.18), 0 8px 24px rgba(14, 165, 233, 0.08);
+  color: #fef3c7;
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.22), rgba(16, 185, 129, 0.14));
+  border: 1px solid rgba(250, 204, 21, 0.42);
+  box-shadow: inset 0 1px 0 rgba(254, 243, 199, 0.18), 0 8px 24px rgba(245, 158, 11, 0.12), 0 6px 18px rgba(16, 185, 129, 0.08);
   letter-spacing: 0.01em;
   transition: transform 180ms cubic-bezier(0.22, 1, 0.36, 1), border-color 180ms ease, box-shadow 180ms ease, background-color 180ms ease;
 }
@@ -389,7 +396,7 @@ select:focus {
   inset: 1px;
   z-index: -1;
   border-radius: inherit;
-  background: radial-gradient(circle at 24% 18%, rgba(125, 211, 252, 0.32), transparent 30%), linear-gradient(100deg, transparent 8%, rgba(255, 255, 255, 0.20) 44%, transparent 60%);
+  background: radial-gradient(circle at 24% 18%, rgba(250, 204, 21, 0.28), transparent 30%), linear-gradient(100deg, transparent 8%, rgba(255, 255, 255, 0.20) 44%, transparent 60%);
   opacity: 0.7;
   transform: translateX(-8%);
   transition: transform 180ms cubic-bezier(0.22, 1, 0.36, 1), opacity 180ms ease;
@@ -397,14 +404,14 @@ select:focus {
 
 .region-badge:hover {
   transform: translateY(-2px) scale(1.01);
-  border-color: rgba(56, 189, 248, 0.68);
-  box-shadow: inset 0 1px 0 rgba(191, 219, 254, 0.28), 0 12px 34px rgba(14, 165, 233, 0.20);
+  border-color: rgba(250, 204, 21, 0.70);
+  box-shadow: inset 0 1px 0 rgba(254, 243, 199, 0.26), 0 12px 34px rgba(245, 158, 11, 0.18), 0 8px 24px rgba(16, 185, 129, 0.12);
 }
 
 .region-badge:focus-visible {
   transform: translateY(-2px) scale(1.01);
-  border-color: rgba(56, 189, 248, 0.68);
-  box-shadow: inset 0 1px 0 rgba(191, 219, 254, 0.28), 0 12px 34px rgba(14, 165, 233, 0.20);
+  border-color: rgba(250, 204, 21, 0.70);
+  box-shadow: inset 0 1px 0 rgba(254, 243, 199, 0.26), 0 12px 34px rgba(245, 158, 11, 0.18), 0 8px 24px rgba(16, 185, 129, 0.12);
 }
 
 .region-badge:hover::before,
@@ -535,6 +542,12 @@ select:focus {
   transform: translateY(-2px);
 }
 
+.delay-metric.delay-excellent { color: #86efac; }
+.delay-metric.delay-good { color: #4ade80; }
+.delay-metric.delay-warning { color: #facc15; }
+.delay-metric.delay-poor { color: #c4b5fd; }
+.delay-metric.delay-timeout { color: #fca5a5; }
+
 .available-count {
   font-size: 1.1rem;
   font-weight: 800;
@@ -556,18 +569,29 @@ select:focus {
 }
 
 .group-locate-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
   padding: 4px 12px;
   font-size: 12px;
   border-radius: var(--radius-sm);
-  background: var(--bg-card-hover);
-  color: var(--text-secondary);
-  border: 1px solid var(--border-color);
+  background: linear-gradient(135deg, rgba(168, 85, 247, 0.22), rgba(6, 182, 212, 0.14));
+  color: #c4b5fd;
+  border: 2px solid rgba(168, 85, 247, 0.78);
   flex-shrink: 0;
 }
 
 .group-locate-btn:hover {
-  background: var(--bg-card);
-  border-color: var(--border-light);
+  background: linear-gradient(135deg, rgba(168, 85, 247, 0.30), rgba(6, 182, 212, 0.20));
+  border-color: rgba(196, 181, 253, 0.95);
+  box-shadow: 0 0 0 3px rgba(168, 85, 247, 0.18);
+}
+
+.button-icon {
+  width: 1em;
+  height: 1em;
+  flex: 0 0 auto;
+  stroke: currentColor;
 }
 
 /* ---- 节点延时 badge ---- */
@@ -726,13 +750,30 @@ button.node-card {
   font-family: inherit;
 }
 
-.node-card-active {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 2px var(--accent-subtle);
+.node-card.active {
+  border-color: rgba(129, 140, 248, 0.95);
+  background-image: radial-gradient(circle at 12% 18%, rgba(129, 140, 248, 0.30), transparent 34%);
+  box-shadow: 0 0 0 1px rgba(129, 140, 248, 0.72), 0 0 28px rgba(129, 140, 248, 0.34), inset 0 1px 0 rgba(255, 255, 255, 0.16);
 }
 
+.node-card.active::before {
+  content: "";
+  position: absolute;
+  inset: 8px auto 8px 6px;
+  width: 4px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(224, 231, 255, 0.95), rgba(129, 140, 248, 0.80));
+  box-shadow: 0 0 18px rgba(129, 140, 248, 0.72);
+}
+
+.node-card-active {
+  border-color: rgba(129, 140, 248, 0.95);
+  box-shadow: 0 0 0 1px rgba(129, 140, 248, 0.72), 0 0 28px rgba(129, 140, 248, 0.34);
+}
+
+.node-card.active:hover,
 .node-card-active:hover {
-  border-color: var(--accent);
+  border-color: rgba(129, 140, 248, 0.95);
   opacity: 0.9;
   background: inherit;
 }
