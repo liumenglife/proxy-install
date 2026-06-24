@@ -1,55 +1,32 @@
 # sing-box TUN 透明代理
 
-基于 sing-box 的 Docker 透明代理方案，支持多机场多协议节点管理与 Web UI 操作。
+在 Ubuntu Server 22.04 上通过 Docker 部署 sing-box 透明代理，接管宿主机全部流量，通过自研 Web UI（proxy-ui）管理节点选择。
 
-## 目录结构
+## 现状
 
-    .
-    ├── docker-compose.yml          # 3 服务编排（sing-box + sub-store + proxy-ui）
-    ├── .env                        # 环境变量（镜像版本、端口、路径）
-    ├── configs/
-    │   └── sing-box/
-    │       ├── mixed.json          # 第一阶段 mixed 模式配置骨架
-    │       └── tun-inbound.json    # 第二阶段 TUN 入站增量配置
-    ├── scripts/
-    │   ├── deploy.sh               # 一键部署脚本（--phase1 / --phase2）
-    │   ├── group-nodes.sh          # 分组后处理脚本（三层分组）
-    │   ├── backup-network-state.sh # 网络状态备份
-    │   └── ...
-    ├── recovery.sh                 # 三级灾难恢复脚本
-    └── README.md                   # 本文件
+TUN 模式已部署并稳定运行：
 
-## 快速开始
+- **sing-box** `v1.13.13` — 核心代理引擎，TUN 入站接管全部流量
+- **proxy-ui** — 自研 Web UI（:9091），支持自动组选择、手动节点切换、延时测试、代理开关
+- **sub-store** — 订阅管理，4 个机场 342 个真实节点
+- **TUN 网卡** `tun0=UP`，透明代理出口已验证可用
 
-### 第一阶段：mixed 模式（安全上架）
+## 功能
 
-    sudo bash scripts/deploy.sh --phase1
+### 代理管理
 
-部署完成后：
+| 功能 | 说明 |
+|------|------|
+| 透明代理 | TUN 模式接管宿主机全部流量，无需逐应用配置代理 |
+| 自动组选择 | 卡片式自动组选择器，点击即可切换（`全部聚合/按机场/按地区`） |
+| 手动节点选择 | 按地区/机场分组，展开卡片点选具体节点，支持延时排序 |
+| 延时测试 | 单组或全部节点批量延时测试，结果同步刷新节点 badge |
+| 代理开关 | 一键关闭代理（切换为 direct），再次点击恢复上次代理组 |
+| 内核重启 | 一键重启 sing-box 容器 |
+| 全局展开/收起 | Command+K 展开全部手动组，Command+L 收起 |
+| 实际路由标签 | 顶部三段式路由标签显示当前路径（组→机场→节点），节点段附带延时徽章 |
 
-1. 打开 http://192.168.100.135:9001 配置 sub-store
-2. 添加机场订阅，并确认单条订阅可刷新成功
-3. 预览导出：`bash scripts/export-substore-singbox.sh`
-4. 验证导出：`bash scripts/test-export-substore-singbox.sh`
-5. 应用到运行配置并重启：`sudo bash scripts/export-substore-singbox.sh --apply`
-6. 打开 http://192.168.100.135:9091 使用 Web UI
-
-### 第二阶段：TUN 模式（透明代理）
-
-满足以下条件后执行：
-
-- 第一阶段稳定运行 24 小时以上
-- 节点可用率 ≥ 60%
-- 核心地区（香港/日本/新加坡/美国）每个至少一个稳定节点
-- 已通过物理快照验收
-
-执行：
-
-1. `sudo bash recovery.sh --drill` 演练恢复流程
-2. `sudo bash scripts/deploy.sh --phase2`
-3. 跟随提示完成物理快照
-
-## 分组架构
+### 节点分组
 
 三层分组并列，无嵌套：
 
@@ -59,89 +36,126 @@
 | 按机场 | 按机场/{名称}/自动组 | 按机场/{名称}/手动组 |
 | 按地区 | 按地区/{名称}/自动组 | 按地区/{名称}/手动组 |
 
-代理选择器规则：
+地区覆盖：香港、台湾、澳门、美国、日本、英国、法国、德国、韩国、新加坡、泰国、菲律宾、马来西亚、印尼、越南、巴基斯坦、印度、土耳其、沙特、阿曼、巴林、卡塔尔、伊拉克、俄罗斯、乌克兰、荷兰、加拿大、澳大利亚、巴西、智利、埃及、柬埔寨、墨西哥、阿根廷、新西兰，其余归入"其他"且永远排在最后。
 
-- **自动分组选择器**（读写）：只列出所有自动组，不支持直接选节点
-- **实际路由标签**（只读）：显示当前完整路径（组→节点）
-- 手动组选节点后自动更新路由标签和 route.final
+### 节点标签命名
 
-## 节点标签命名规范
+格式：`{地区}-{机场}-{节点名}`
 
-节点 tag 格式：`{地区}-{机场}-{节点名}`（节点名来自订阅，不做预定）
-
-示例格式说明：`香港-机场A-{节点名}`、`日本-机场B-{节点名}`
-
-分组脚本按连字符分段解析：
-
-- 第一段 → 地区（Region）
-- 第二段 → 机场（Airport）
-- 剩余 → 节点名称
-
-## 恢复方案
-
-详细说明参考 `recovery.sh`，三级恢复 + snapshot + last-resort：
-
-| 级别 | 操作 | RTO |
-|------|------|-----|
-| level1 | 重启容器 + 恢复基本路由 | ~5 分钟 |
-| level2 | 停 TUN + 清 nftables + 恢复原始 DNS | ~10 分钟 |
-| level3 | 完全拆除 TUN 环境 + 停 sing-box | ~15 分钟 |
-| snapshot | 从备份快照恢复网络配置 | ~10 分钟 |
-| last-resort | 重建 Docker + 全量恢复 | ~30 分钟 |
-
-## 验收标准
-
-1. Web UI 能加载节点列表
-2. 自动分组选择器默认显示：全部聚合/自动组
-3. 切换自动组 → curl ipinfo.io 验证出口变化
-4. 手动组选节点 → 路由标签自动更新
-5. 自动组内点节点 → 弹提示"请去手动组选择"
-6. 刷新页面后状态保持
-7. 核心地区（香港/日本/新加坡/美国）可用节点比例 ≥ 60%
-8. SSH 在 Phase 1 期间持续可用
-9. Phase 2 前演练通过
-10. 无需 Web UI 也能通过 mixed 端口使用 HTTP/SOCKS5 代理
+系统自动解析并生成对应分组：地区维度取第一段，机场维度取第二段。
 
 ## 端口分配
 
 | 端口 | 服务 | 说明 |
 |------|------|------|
 | 7890 | sing-box mixed | HTTP/SOCKS5 代理入口 |
-| 9090 | sing-box API | Clash API，供 proxy-ui 连接的后端接口 |
-| 9091 | proxy-ui | Web UI（独立容器，映射容器 80 端口） |
-| 9001 | sub-store UI | 订阅管理面板（容器 3001） |
-| 9002 | sub-store API | sub-store 后端接口（容器 3000） |
+| 9090 | sing-box Clash API | proxy-ui 后端接口 |
+| 9091 | proxy-ui Web UI | 自研控制面板 |
+| 9001 | sub-store UI | 订阅管理面板 |
+| 9002 | sub-store API | sub-store 后端接口 |
 
-proxy-ui 不使用 9090，因为 9090 已由 sing-box 的 Clash API 占用。proxy-ui 是从零实现的前端 Web UI，浏览器访问 9091；它通过服务端代理连接 9090 读取和切换 sing-box 代理组。
+## 导出并应用订阅
 
-## Web UI 登录与连接
+在 sub-store 配置好机场订阅后：
 
-### proxy-ui
+```bash
+# 预览导出
+bash scripts/export-substore-singbox.sh
 
-- 前端地址：`http://192.168.100.135:9091`
-- 后端代理：同源 `/api`，由 proxy-ui 服务端转发到 sing-box Clash API `http://host.docker.internal:9090`
+# 验证导出结构
+bash scripts/test-export-substore-singbox.sh
 
-当前 proxy-ui 是从零实现的独立前端，compose 会基于 `Dockerfile.proxy-ui` 构建本地镜像 `proxy-install/proxy-ui:latest`。浏览器只需要打开 `http://192.168.100.135:9091`，页面请求同源 `/api`，后端由服务端代理到 Clash API。
+# 应用到运行配置并重启 sing-box
+sudo bash scripts/export-substore-singbox.sh --apply
+```
 
-首次打开 `http://192.168.100.135:9091` 可直接使用，不需要填写后端地址、密钥，也不需要添加连接。不要在浏览器里访问或填写 `http://127.0.0.1:9090`；Clash API 只由 proxy-ui 服务端代理访问。
+## 灾难恢复
 
-### sub-store
+TUN 模式会修改宿主机网络配置。如果 TUN 出问题导致 SSH 断开或 Web UI 不可访问，按以下步骤恢复。
 
-- 前端地址：`http://192.168.100.135:9001`
-- 订阅管理页面：`http://192.168.100.135:9001/subs`
-- 后端地址：`http://192.168.100.135:9002`
+### 你只需记住一句
 
-compose 会基于 `xream/sub-store:2.31.0-http-meta` 构建本地补丁镜像 `proxy-install/sub-store:2.31.0-http-meta`，把 Sub-Store 前端默认后端从官方 `https://sub.store` 改为本机 `http://192.168.100.135:9002`。
+```bash
+cd /home/lm/soft-install/proxy-install && sudo bash recovery.sh
+```
 
-正常情况下直接打开 `/subs` 不需要手动填写后端地址；如果浏览器仍显示旧错误，先强制刷新或清理该站点缓存。
+会打开交互菜单：
 
-## 当前订阅状态与下一步
+```text
+1) 一级恢复（网络恢复）        ← SSH 断开时选这个
+2) 二级恢复（回退到 mixed 模式）
+3) 三级恢复（从快照完全还原）
+4) 演练模式
+5) 快照备份
+6) 最后手段（禁用容器 + 重启）
+7) 退出
+```
 
-你已经在 sub-store 配置了 4 个机场，下一步是自动导出节点并生成 sing-box 分组：
+### 常见故障场景与应对
 
-1. 在 sub-store 中确认 4 个“单条订阅”都能刷新成功。
-2. 运行 `bash scripts/export-substore-singbox.sh`，默认输出到 `generated/substore-singbox/`。
-3. 运行 `bash scripts/test-export-substore-singbox.sh` 验证 JSON 结构、三层分组和真实节点数。
-4. 确认可应用后运行 `sudo bash scripts/export-substore-singbox.sh --apply`，写入 `/etc/sing-box/config.json` 并重启 `sing-box`。
+| 场景 | 现象 | 操作 |
+|------|------|------|
+| SSH 断开 | 无法远程登录 | 从虚拟机控制台登录，运行 `sudo bash recovery.sh`，选 `1` |
+| 网络异常但 SSH 在 | 代理不通 / 国内国外都断 | 运行 `sudo bash recovery.sh`，选 `2` |
+| TUN 配置损坏 | sing-box 无法启动 | 运行 `sudo bash recovery.sh`，选 `2` |
+| 系统网络彻底乱了 | 恢复菜单无效 | 运行 `sudo bash recovery.sh`，选 `6` 禁用容器并重启 |
 
-如果某个机场显示 `NetworkError`，说明该机场订阅链接当前从服务器侧无法访问；先不要把它作为验收通过节点来源。
+### 恢复后重新部署
+
+一级恢复后网络已通，但 TUN 被移除。如需重新开启：
+
+```bash
+sudo bash scripts/export-substore-singbox.sh --apply   # 确保配置最新
+sudo bash scripts/deploy.sh --phase2                    # 重新部署 TUN
+```
+
+## 日常运维
+
+```bash
+# 重建 proxy-ui（UI 代码更新后）
+docker compose up -d --build proxy-ui
+
+# 重新生成并应用订阅配置
+sudo bash scripts/export-substore-singbox.sh --apply
+
+# 查看部署状态
+docker ps --format 'table {{.Names}}\t{{.Status}}'
+
+# 验证 TUN 是否工作
+curl ip.sb                    # 应显示代理出口 IP
+
+# 验证 Web UI
+curl http://192.168.100.135:9091
+```
+
+## 测试
+
+```bash
+# 全量单元测试
+node --test tests/
+
+# 导出结构测试
+bash scripts/test-export-substore-singbox.sh
+
+# 恢复脚本接口测试
+bash scripts/test-recovery-interface.sh
+```
+
+## 容器架构
+
+```
+Ubuntu Server 22.04 (192.168.100.135)
+  ├── sing-box (network_mode: host, NET_ADMIN, /dev/net/tun)
+  │     ├── tun0: 172.19.0.1/30 (透明代理入口)
+  │     ├── mixed-in: ::7890 (HTTP/SOCKS5 备用)
+  │     └── Clash API: 0.0.0.0:9090
+  │
+  ├── proxy-ui (bridge, :9091→80)
+  │     └── → host.docker.internal:9090 (sing-box API)
+  │
+  ├── sub-store (bridge, :9001→3001, :9002→3000)
+  │     └── 订阅管理 + sing-box 格式导出
+  │
+  └── control-agent (bridge, expose 3000)
+        └── → host.docker.internal:9090 (重启 sing-box)
+```
