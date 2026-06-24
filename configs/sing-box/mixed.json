@@ -33,7 +33,7 @@
   "outbounds": [
     { "type": "direct", "tag": "direct" },
     { "type": "block", "tag": "block" },
-    { "type": "selector", "tag": "代理选择标签", "outbounds": ["direct", "全部聚合/自动组", "全部聚合/手动组"] },
+    { "type": "selector", "tag": "代理选择标签", "outbounds": ["全部聚合/自动组", "全部聚合/手动组", "direct"], "default": "全部聚合/自动组" },
     { "type": "selector", "tag": "GLOBAL", "outbounds": ["代理选择标签"] },
     { "type": "urltest", "tag": "全部聚合/自动组", "outbounds": ["direct"], "interval": "20s" },
     { "type": "selector", "tag": "全部聚合/手动组", "outbounds": ["direct"] }
@@ -58,7 +58,7 @@
         "tag": "geosite-cn",
         "type": "remote",
         "url": "https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-cn.srs",
-        "download_detour": "direct"
+        "download_detour": "全部聚合/自动组"
       }
     ],
     "default_domain_resolver": "dns-local",

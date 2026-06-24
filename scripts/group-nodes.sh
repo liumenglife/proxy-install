@@ -18,14 +18,18 @@ fi
 NODES=$(jq -c '.outbounds[] | select(.type != "direct" and .type != "block" and .type != "dns" and .type != "urltest" and .type != "selector")' "$NODES_FILE")
 TAGS=$(echo "$NODES" | jq -r '.tag')
 
-# 提取地区前缀（tag 第一段，连字符前，如 香港-xxx → 香港）
-REGIONS=$(echo "$TAGS" | sed 's/-.*//' | sort -u)
+# 提取地区前缀（tag 第一段，连字符前，如 香港-xxx → 香港），其他永远排最后
+REGIONS=$(echo "$TAGS" | sed 's/-.*//' | sort -u | grep -v '^其他$' | sort -u; echo "$TAGS" | sed 's/-.*//' | grep '^其他$' | head -1)
 
 # 提取机场信息（tag 第二段，如 香港-机场A-{节点名} → 机场A）
 AIRPORTS=$(echo "$TAGS" | awk -F- '{print $2}' | sort -u)
 
 # 全部节点 tag 数组
 ALL_TAGS=$(echo "$TAGS" | jq -R -s 'split("\n") | map(select(length > 0))')
+
+GROUPS_JSON=$(mktemp)
+GROUPS2_JSON=$(mktemp)
+trap 'rm -f "$GROUPS_JSON" "$GROUPS2_JSON"' EXIT
 
 # 生成分组骨架
 jq -n \
@@ -44,7 +48,7 @@ jq -n \
     [ $rg_list[] | { "type": "urltest", "tag": ("按地区/" + . + "/自动组"), "outbounds": [], "interval": "20s" },
       { "type": "selector", "tag": ("按地区/" + . + "/手动组"), "outbounds": [] } ]
   )
-' > /tmp/groups.json
+' > "$GROUPS_JSON"
 
 # 将节点分配到对应的机场组和地区组
 echo "$NODES" | while read -r node; do
@@ -55,12 +59,12 @@ echo "$NODES" | while read -r node; do
     # 分配到机场组（自动+手动）
     jq --arg tag "$TAG" --arg airport "$AIRPORT" \
       '(.[] | select(.tag == "按机场/" + $airport + "/自动组" or .tag == "按机场/" + $airport + "/手动组") | .outbounds) += [$tag]' \
-      /tmp/groups.json > /tmp/groups2.json && mv /tmp/groups2.json /tmp/groups.json
+      "$GROUPS_JSON" > "$GROUPS2_JSON" && mv "$GROUPS2_JSON" "$GROUPS_JSON"
 
     # 分配到地区组（自动+手动）
     jq --arg tag "$TAG" --arg region "$REGION" \
       '(.[] | select(.tag == "按地区/" + $region + "/自动组" or .tag == "按地区/" + $region + "/手动组") | .outbounds) += [$tag]' \
-      /tmp/groups.json > /tmp/groups2.json && mv /tmp/groups2.json /tmp/groups.json
+      "$GROUPS_JSON" > "$GROUPS2_JSON" && mv "$GROUPS2_JSON" "$GROUPS_JSON"
 done
 
-cat /tmp/groups.json
+cat "$GROUPS_JSON"

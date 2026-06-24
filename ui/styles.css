@@ -163,6 +163,52 @@ select:focus {
   box-shadow: 0 0 0 3px var(--accent-subtle);
 }
 
+.auto-group-cards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.auto-group-card {
+  padding: 0.45rem 0.85rem;
+  border-radius: 0.5rem;
+  border: 1px solid var(--border-color);
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 0.88rem;
+  font-weight: 700;
+  transition: background 120ms ease, border-color 120ms ease, color 120ms ease, transform 80ms ease;
+}
+
+.auto-group-card:hover {
+  border-color: var(--accent);
+  color: var(--text-primary);
+  background: rgba(34, 197, 94, 0.08);
+}
+
+.auto-group-card:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.auto-group-card.selected {
+  border: 3px solid #f59e0b;
+  background: linear-gradient(135deg, #fef3c7, #dbeafe);
+  color: #111827;
+  font-weight: 950;
+}
+
+.auto-group-card.selected:hover {
+  background: linear-gradient(135deg, #fef3c7, #dbeafe);
+  border-color: #f59e0b;
+  color: #111827;
+}
+
+.auto-group-card:active {
+  transform: scale(0.96);
+}
+
 /* ---- 顶部状态卡 ---- */
 
 .top-grid {
@@ -191,6 +237,16 @@ select:focus {
   font-size: 13px;
   text-transform: uppercase;
   letter-spacing: 0.04em;
+}
+
+.section-heading span {
+  display: inline;
+  margin-bottom: 0;
+  color: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+  text-transform: none;
+  letter-spacing: inherit;
 }
 
 .capability-title {
@@ -333,6 +389,9 @@ select:focus {
 }
 
 .route-chip-node {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.65rem;
   font-family: monospace;
   font-size: clamp(0.9rem, 1.6vw, 1.05rem);
   color: #fce7f3;
@@ -340,6 +399,28 @@ select:focus {
   border-color: rgba(236, 72, 153, 0.50);
   box-shadow: inset 0 1px 0 rgba(252, 231, 243, 0.16), 0 10px 28px rgba(190, 24, 93, 0.14);
 }
+
+.route-node-delay {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 4.25rem;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  font-family: var(--font-sans);
+  font-size: 0.82rem;
+  font-weight: 900;
+  border: 1px solid currentColor;
+  background: var(--bg-card);
+  color: var(--text-primary);
+}
+
+.route-node-delay.delay-excellent { background: #052e16; color: #86efac; border-color: #22c55e; }
+.route-node-delay.delay-good { background: #14532d; color: #4ade80; border-color: #4ade80; }
+.route-node-delay.delay-warning { background: #422006; color: #facc15; border-color: #facc15; }
+.route-node-delay.delay-poor { background: #2e1065; color: #c4b5fd; border-color: #a855f7; }
+.route-node-delay.delay-timeout { background: #450a0a; color: #fca5a5; border-color: #ef4444; }
+.route-node-delay.delay-unknown { background: #1e293b; color: #94a3b8; border-color: #64748b; }
 
 .route-arrow {
   font-size: 1.1rem;

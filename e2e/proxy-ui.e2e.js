@@ -106,9 +106,9 @@ test('独立代理 UI 显示顶部控制、只读路由和自动组列表', asyn
   await expect(page.getByTestId('route-track')).toContainText('→');
 
   const optionValues = await page
-    .getByTestId('auto-group-select')
-    .locator('option')
-    .evaluateAll((options) => options.map((option) => option.value).filter(Boolean));
+    .getByTestId('auto-group-cards')
+    .locator('[data-testid="auto-group-card"]')
+    .evaluateAll((cards) => cards.map((card) => card.getAttribute('data-auto-group')).filter(Boolean));
   const expectedAutoGroups = [
     '全部聚合/自动组',
     '按机场/猫熊机场/自动组',
@@ -182,7 +182,7 @@ test('自动组切换和手动组节点选择会刷新并保持代理选择标�
 
   const automaticGroup = pickDifferent(automaticGroups, proxies[selectorName].now);
   await page.goto(`${frontendUrl}?_pw=${Date.now()}`, { waitUntil: 'networkidle' });
-  await page.getByTestId('auto-group-select').selectOption(automaticGroup);
+  await page.locator(`[data-auto-group="${automaticGroup}"]`).click();
   await expect.poll(async () => (await getProxies(request))[selectorName].now).toBe(automaticGroup);
   await expect(page.getByTestId('route-segment-selector')).toContainText(automaticGroup.split('/').filter(Boolean).join(' / '));
 

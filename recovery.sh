@@ -45,10 +45,34 @@ fi
 # ========================================
 
 find_interface() {
+    local iface
+    local bf
+
+    is_valid_physical_interface() {
+        local i="$1"
+        [ -n "$i" ] || return 1
+        [ "$i" = "lo" ] && return 1
+        [[ "$i" == tun* ]] && return 1
+        [[ "$i" == docker* ]] && return 1
+        [[ "$i" == br-* ]] && return 1
+        [[ "$i" == veth* ]] && return 1
+        [[ "$i" == virbr* ]] && return 1
+        [ -e "/sys/class/net/$i" ] || return 1
+        ip -4 addr show "$i" 2>/dev/null | grep -q "inet "
+    }
+
+    for bf in "$BACKUP_FILE" "$BACKUP_FILE_LOCAL"; do
+        if [ -f "$bf" ]; then
+            iface=$(grep "^DEFAULT_IFACE=" "$bf" | head -1 | cut -d= -f2)
+            if is_valid_physical_interface "$iface"; then
+                echo "$iface"
+                return 0
+            fi
+        fi
+    done
+
     for i in $(ls /sys/class/net/ 2>/dev/null); do
-        [ "$i" = "lo" ] && continue
-        [[ "$i" == tun* ]] && continue
-        if ip -4 addr show "$i" 2>/dev/null | grep -q "inet "; then
+        if is_valid_physical_interface "$i"; then
             echo "$i"
             return 0
         fi
@@ -76,15 +100,15 @@ find_gateway() {
 }
 
 verify_connectivity() {
-    local ok=0
+    local ok=1
     for target in 223.5.5.5 8.8.8.8 114.114.114.114; do
         if ping -c 2 -W 3 "$target" &>/dev/null; then
             echo "   $target 可达"
-            ok=1
+            ok=0
             break
         fi
     done
-    if [ "$ok" = "1" ]; then
+    if [ "$ok" = "0" ]; then
         echo "   国内: $(curl -s --connect-timeout 3 https://www.baidu.com -o /dev/null -w "%{http_code}" 2>/dev/null || echo '超时')"
         echo "   国外: $(curl -s --connect-timeout 3 https://www.google.com -o /dev/null -w "%{http_code}" 2>/dev/null || echo '超时')"
         echo "   出口 IP: $(curl -s --connect-timeout 3 ip.sb 2>/dev/null || echo '无法获取')"

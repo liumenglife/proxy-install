@@ -140,18 +140,39 @@ while read -r sub; do
       def region($tag):
         if $tag | test("香港|港|HK|Hong ?Kong"; "i") then "香港"
         elif $tag | test("台湾|台灣|台|TW|Taiwan"; "i") then "台湾"
+        elif $tag | test("澳门|澳門|🇲🇴|\\bMO\\b|Macau|Macao"; "i") then "澳门"
         elif $tag | test("日本|日|JP|Japan|Tokyo|Osaka"; "i") then "日本"
         elif $tag | test("新加坡|狮城|獅城|SG|Singapore"; "i") then "新加坡"
+        elif $tag | test("泰国|泰國|🇹🇭|\\bTH\\b|Thailand|Bangkok"; "i") then "泰国"
+        elif $tag | test("菲律宾|菲律賓|🇵🇭|\\bPH\\b|Philippines|Manila|马尼拉|馬尼拉"; "i") then "菲律宾"
+        elif $tag | test("马来西亚|馬來西亞|🇲🇾|\\bMY\\b|Malaysia"; "i") then "马来西亚"
+        elif $tag | test("印尼|印度尼西亚|印度尼西亞|🇮🇩|\\bID\\b|Indonesia|Jakarta"; "i") then "印尼"
+        elif $tag | test("越南|🇻🇳|\\bVN\\b|Vietnam"; "i") then "越南"
+        elif $tag | test("巴基斯坦|🇵🇰|\\bPK\\b|Pakistan"; "i") then "巴基斯坦"
+        elif $tag | test("印度|🇮🇳|\\bIN\\b|India|Mumbai"; "i") then "印度"
+        elif $tag | test("土耳其|土|🇹🇷|\\bTR\\b|Turkey|Istanbul"; "i") then "土耳其"
+        elif $tag | test("沙特阿拉伯|沙特|🇸🇦|\\bSA\\b|Saudi"; "i") then "沙特"
+        elif $tag | test("阿曼|🇴🇲|\\bOM\\b|Oman"; "i") then "阿曼"
+        elif $tag | test("巴林|🇧🇭|\\bBH\\b|Bahrain"; "i") then "巴林"
+        elif $tag | test("卡塔尔|卡塔爾|🇶🇦|\\bQA\\b|Qatar"; "i") then "卡塔尔"
+        elif $tag | test("伊拉克|🇮🇶|\\bIQ\\b|Iraq"; "i") then "伊拉克"
         elif $tag | test("美国|美國|美|US|USA|United ?States|America|洛杉矶|洛杉磯|纽约|紐約|硅谷|西雅图|西雅圖"; "i") then "美国"
         elif $tag | test("韩国|韓國|韩|韓|KR|Korea|Seoul"; "i") then "韩国"
         elif $tag | test("英国|英國|英|UK|United ?Kingdom|Britain|London"; "i") then "英国"
         elif $tag | test("德国|德國|德|DE|Germany|Frankfurt"; "i") then "德国"
         elif $tag | test("法国|法國|法|FR|France|Paris"; "i") then "法国"
+        elif $tag | test("俄罗斯|俄羅斯|俄|RU|Russia|Moscow|莫斯科"; "i") then "俄罗斯"
+        elif $tag | test("乌克兰|烏克蘭|🇺🇦|\\bUA\\b|Ukraine"; "i") then "乌克兰"
+        elif $tag | test("荷兰|荷蘭|🇳🇱|\\bNL\\b|Netherlands"; "i") then "荷兰"
         elif $tag | test("加拿大|加|CA|Canada|Toronto|Vancouver"; "i") then "加拿大"
-        elif $tag | test("澳大利亚|澳大利亞|澳洲|澳|AU|Australia|Sydney"; "i") then "澳大利亚"
-        elif $tag | test("俄罗斯|俄羅斯|俄|RU|Russia|Moscow"; "i") then "俄罗斯"
-        elif $tag | test("印度|印|IN|India|Mumbai"; "i") then "印度"
-        elif $tag | test("土耳其|土|TR|Turkey|Istanbul"; "i") then "土耳其"
+        elif $tag | test("澳大利亚|澳大利亞|澳洲|\\bAU\\b|Australia|Sydney"; "i") then "澳大利亚"
+        elif $tag | test("巴西|🇧🇷|\\bBR\\b|Brazil"; "i") then "巴西"
+        elif $tag | test("智利|🇨🇱|\\bCL\\b|Chile"; "i") then "智利"
+        elif $tag | test("埃及|🇪🇬|\\bEG\\b|Egypt"; "i") then "埃及"
+        elif $tag | test("柬埔寨|🇰🇭|\\bKH\\b|Cambodia"; "i") then "柬埔寨"
+        elif $tag | test("墨西哥|🇲🇽|\\bMX\\b|Mexico"; "i") then "墨西哥"
+        elif $tag | test("阿根廷|🇦🇷|\\bAR\\b|Argentina"; "i") then "阿根廷"
+        elif $tag | test("新西兰|新西蘭|🇳🇿|\\bNZ\\b|New ?Zealand"; "i") then "新西兰"
         else "其他"
         end;
       .outbounds[]? | select(real_node) |
@@ -182,9 +203,10 @@ jq -s '
   (.[1].outbounds) as $nodes |
   (.[2]) as $groups |
   ($groups | map(select((.type == "urltest" or .type == "selector") and (.tag | test("^(全部聚合|按机场/|按地区/)"))) | .tag)) as $group_choices |
-  (["direct"] + $group_choices) as $proxy_choices |
+  ($group_choices | map(select(. != "全部聚合/自动组"))) as $other_group_choices |
+  (["全部聚合/自动组"] + $other_group_choices + ["direct"] | reduce .[] as $item ([]; if index($item) then . else . + [$item] end)) as $proxy_choices |
   ([
-    {"type":"selector","tag":"代理选择标签","outbounds":$proxy_choices},
+    {"type":"selector","tag":"代理选择标签","outbounds":$proxy_choices,"default":"全部聚合/自动组"},
     {"type":"selector","tag":"GLOBAL","outbounds":["代理选择标签"]}
   ]) as $top_selectors |
   (builtin_outbounds + $nodes + $top_selectors + $groups)
